@@ -48,10 +48,15 @@ app.post('/api/proofs', async (req, res) => {
     try {
         const { titulo, banca, data, results } = req.body;
 
-        // Passo 2: Validação básica dos dados
+        // Passo 2: Validação básica dos dados e extração do ano
         if (!titulo || !banca || !data || !Array.isArray(results)) {
             return res.status(400).json({ error: "Dados inválidos ou faltando. Verifique o título, banca, data e resultados." });
         }
+
+        // const ano = new Date(data).getFullYear(); // Removido ou comentado, pois 'ano' não é esperado pelo schema
+        // if (isNaN(ano)) { 
+        //     return res.status(400).json({ error: "Formato de data inválido, não foi possível extrair o ano." });
+        // }
 
         // Passo 3: Criação da prova no banco de dados
         const newProof = await prisma.proof.create({
