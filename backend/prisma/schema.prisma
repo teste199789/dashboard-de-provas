@@ -1,0 +1,31 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Proof {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  titulo    String
+  banca     String
+  ano       Int
+  results   Result[]
+}
+
+model Result {
+  id          Int    @id @default(autoincrement())
+  disciplina  String
+  acertos     Int
+  erros       Int
+  brancos     Int
+  anuladas    Int
+  proof       Proof  @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  proofId     Int
+}
