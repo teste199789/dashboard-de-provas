@@ -15,7 +15,7 @@ model Proof {
   createdAt DateTime @default(now())
   titulo    String
   banca     String
-  ano       Int
+  data      DateTime // <-- Campo atualizado
   results   Result[]
 }
 

@@ -33,6 +33,13 @@ export const deleteProof = async (id) => {
     return response.ok; // Retorna true se a operação foi bem-sucedida
 };
 
+export const getProofById = async (id) => {
+    const response = await fetch(`${API_URL}/proofs/${id}`);
+    if (!response.ok) {
+        throw new Error(`Erro de HTTP! Status: ${response.status}`);
+    }
+    return response.json();
+};
 
 // --- Função para a API da Gemini ---
 
@@ -65,4 +72,5 @@ export const getAIAnalysis = async (disciplinas, totais) => {
         console.error("Erro ao conectar com a IA:", error);
         return 'Ocorreu um erro ao conectar com o serviço de análise.';
     }
+    
 };

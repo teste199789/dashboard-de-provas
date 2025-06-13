@@ -5,8 +5,8 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const app = express();
 
-app.use(cors()); // Permite que o frontend acesse o backend
-app.use(express.json()); // Permite que o servidor entenda JSON
+app.use(cors());
+app.use(express.json());
 
 const PORT = 3001;
 
@@ -14,8 +14,8 @@ const PORT = 3001;
 app.get('/api/proofs', async (req, res) => {
     try {
         const proofs = await prisma.proof.findMany({
-            include: { results: true }, // Inclui os resultados de cada prova na resposta
-            orderBy: { createdAt: 'desc' }, // Ordena pelas mais recentes
+            include: { results: true },
+            orderBy: { data: 'desc' },
         });
         res.json(proofs);
     } catch (error) {
@@ -23,26 +23,64 @@ app.get('/api/proofs', async (req, res) => {
     }
 });
 
-// ROTA 2: Adicionar uma nova prova
-app.post('/api/proofs', async (req, res) => {
+// ROTA para buscar UMA prova pelo seu ID
+app.get('/api/proofs/:id', async (req, res) => {
     try {
-        const { titulo, banca, ano, results } = req.body;
+        const { id } = req.params;
+        const proof = await prisma.proof.findUnique({
+            where: { id: parseInt(id) },
+            include: { results: true },
+        });
+        if (!proof) {
+            return res.status(404).json({ error: "Prova não encontrada." });
+        }
+        res.json(proof);
+    } catch (error) {
+        res.status(500).json({ error: "Não foi possível buscar a prova." });
+    }
+});
+
+// ROTA 2: Adicionar uma nova prova (VERSÃO FINAL E ROBUSTA)
+app.post('/api/proofs', async (req, res) => {
+    // Passo 1: Imprimir os dados recebidos para diagnóstico
+    console.log("Dados recebidos no backend:", JSON.stringify(req.body, null, 2));
+
+    try {
+        const { titulo, banca, data, results } = req.body;
+
+        // Passo 2: Validação básica dos dados
+        if (!titulo || !banca || !data || !Array.isArray(results)) {
+            return res.status(400).json({ error: "Dados inválidos ou faltando. Verifique o título, banca, data e resultados." });
+        }
+
+        // Passo 3: Criação da prova no banco de dados
         const newProof = await prisma.proof.create({
             data: {
-                titulo,
-                banca,
-                ano,
+                titulo: titulo,
+                banca: banca,
+                data: new Date(data), // Prisma converte a string de data (ex: "2025-06-13") para o formato DateTime
                 results: {
-                    create: results, // O Prisma cria os resultados relacionados automaticamente
+                    create: results, // O array de resultados já vem formatado do frontend
                 },
             },
             include: {
                 results: true,
             },
         });
+
+        // Passo 4: Enviar resposta de sucesso
+        console.log("Prova salva com sucesso:", newProof.id);
         res.status(201).json(newProof);
+
     } catch (error) {
-        res.status(500).json({ error: "Não foi possível adicionar a prova." });
+        // Passo 5: Capturar e registrar o erro detalhado do Prisma
+        console.error("### ERRO DETALHADO DO PRISMA AO SALVAR PROVA ###");
+        console.error(error);
+        console.error("################################################");
+        res.status(500).json({ 
+            error: "O servidor encontrou um erro ao tentar salvar no banco de dados.",
+            details: "Verifique o console do servidor backend para detalhes técnicos."
+        });
     }
 });
 
@@ -53,7 +91,7 @@ app.delete('/api/proofs/:id', async (req, res) => {
         await prisma.proof.delete({
             where: { id: parseInt(id) },
         });
-        res.status(204).send(); // Resposta de sucesso sem conteúdo
+        res.status(204).send();
     } catch (error) {
         res.status(500).json({ error: "Não foi possível deletar a prova." });
     }

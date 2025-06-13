@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProofs } from '../hooks/useProofs';
 import TrashIcon from '../components/icons/TrashIcon';
+import { formatDate, formatPercent } from '../utils/formatters'; // Importa a função de formatar porcentagem
 
 const ProofsList = () => {
     const { proofsList, openDeleteModal } = useProofs();
@@ -21,6 +22,7 @@ const ProofsList = () => {
             }, { acertos: 0, erros: 0, brancos: 0 });
             const totalQuestoes = totals.acertos + totals.erros + totals.brancos;
             const acertosLiquidos = totals.acertos - totals.erros;
+            // A porcentagem líquida é calculada aqui
             const percentage = totalQuestoes > 0 ? (acertosLiquidos / totalQuestoes) : 0;
             return { ...proof, percentage };
         });
@@ -29,7 +31,7 @@ const ProofsList = () => {
             proofsWithStats = proofsWithStats.filter(p => p.banca.toLowerCase() === filterBanca.toLowerCase());
         }
         if (filterAno.trim() !== '') {
-            proofsWithStats = proofsWithStats.filter(p => p.ano.toString() === filterAno.trim());
+            proofsWithStats = proofsWithStats.filter(p => new Date(p.data).getUTCFullYear().toString() === filterAno.trim());
         }
 
         switch(sortBy) {
@@ -41,7 +43,7 @@ const ProofsList = () => {
                 break;
             case 'recentes':
             default:
-                 proofsWithStats.sort((a, b) => b.id - a.id);
+                 proofsWithStats.sort((a, b) => new Date(b.data) - new Date(a.data));
                 break;
         }
         return proofsWithStats;
@@ -49,9 +51,8 @@ const ProofsList = () => {
 
     const uniqueBancas = useMemo(() => ['todas', ...new Set(proofsList.map(p => p.banca).filter(Boolean))], [proofsList]);
 
-    // A navegação para o detalhe da prova será implementada no futuro
     const handleSelectProof = (id) => {
-        alert(`FUNCIONALIDADE FUTURA: Navegar para o detalhe da prova com ID ${id}.`);
+        navigate(`/minhas-provas/${id}`);
     };
 
     return (
@@ -90,13 +91,17 @@ const ProofsList = () => {
                         <div onClick={() => handleSelectProof(proof.id)} className="text-left p-6 flex-grow cursor-pointer">
                             <h3 className="font-bold text-lg text-teal-600 truncate">{proof.titulo}</h3>
                             <p className="text-gray-600">{proof.banca}</p>
-                            <p className="text-gray-400 text-sm">{proof.ano}</p>
+                            <p className="text-gray-400 text-sm mb-4">{formatDate(proof.data)}</p>
+
+                            {/* --- CÓDIGO ADICIONADO --- */}
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                <p className="text-sm text-gray-500">Acerto Líquido</p>
+                                <p className="text-sm text-gray-500">Aproveitamento Líquido</p>
                                 <p className="text-3xl font-bold text-gray-800">
-                                    {(proof.percentage * 100).toFixed(2).replace('.', ',')}%
+                                    {formatPercent(proof.percentage)}
                                 </p>
                             </div>
+                            {/* --- FIM DO CÓDIGO ADICIONADO --- */}
+
                         </div>
                         <div className="px-6 pb-4 flex justify-end">
                             <button

@@ -4,7 +4,7 @@ CREATE TABLE "Proof" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "titulo" TEXT NOT NULL,
     "banca" TEXT NOT NULL,
-    "ano" INTEGER NOT NULL
+    "data" DATETIME NOT NULL
 );
 
 -- CreateTable

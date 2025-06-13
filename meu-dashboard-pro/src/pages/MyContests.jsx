@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useProofs } from '../hooks/useProofs';
+import { formatDate } from '../utils/formatters'; // Importa a função
 
 const MyContests = () => {
     const { proofsList } = useProofs();
@@ -16,29 +17,33 @@ const MyContests = () => {
             filteredProofs = filteredProofs.filter(p => p.banca.toLowerCase() === filterBanca.toLowerCase());
         }
         if (filterAno.trim() !== '') {
-            filteredProofs = filteredProofs.filter(p => p.ano.toString() === filterAno.trim());
+            filteredProofs = filteredProofs.filter(p => new Date(p.data).getUTCFullYear().toString() === filterAno.trim());
         }
 
         return filteredProofs
-        .map(proof => {
-            const totals = proof.results.reduce((acc, r) => {
-                acc.acertos += r.acertos;
-                acc.erros += r.erros;
-                acc.brancos += r.brancos;
-                return acc;
-            }, { acertos: 0, erros: 0, brancos: 0 });
-            const totalQuestoes = totals.acertos + totals.erros + totals.brancos;
-            const acertosLiquidos = totals.acertos - totals.erros;
-            const percentage = totalQuestoes > 0 ? (acertosLiquidos / totalQuestoes) * 100 : 0;
-            const shortTitle = proof.titulo.split(' ')[0];
-            return { 
-                id: proof.id,
-                name: `${shortTitle} ${proof.ano}`,
-                aproveitamento: parseFloat(percentage.toFixed(2)),
-                full_name: proof.titulo,
-            };
-        })
-        .sort((a,b) => a.id - b.id);
+            .map(proof => {
+                const totals = proof.results.reduce((acc, r) => {
+                    acc.acertos += r.acertos;
+                    acc.erros += r.erros;
+                    acc.brancos += r.brancos;
+                    return acc;
+                }, { acertos: 0, erros: 0, brancos: 0 });
+                const totalQuestoes = totals.acertos + totals.erros + totals.brancos;
+                const acertosLiquidos = totals.acertos - totals.erros;
+                const percentage = totalQuestoes > 0 ? (acertosLiquidos / totalQuestoes) * 100 : 0;
+                
+                const shortTitle = proof.titulo.split(' ')[0];
+                const formattedDate = formatDate(proof.data);
+
+                return { 
+                    id: proof.id,
+                    name: `${shortTitle} (${formattedDate})`,
+                    aproveitamento: parseFloat(percentage.toFixed(2)),
+                    full_name: proof.titulo,
+                    date: new Date(proof.data),
+                };
+            })
+            .sort((a,b) => a.date - b.date); // Ordena pela data da prova
     }, [proofsList, filterBanca, filterAno]);
     
     return (
