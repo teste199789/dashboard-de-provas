@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProofs } from '../hooks/useProofs';
 import TrashIcon from '../components/icons/TrashIcon';
-import { formatDate, formatPercent } from '../utils/formatters'; // Importa a função de formatar porcentagem
+import { formatDate, formatPercent } from '../utils/formatters';
+import { calculatePerformance } from '../utils/calculators'; // <-- IMPORTA O NOVO CALCULADOR
 
 const ProofsList = () => {
     const { proofsList, openDeleteModal } = useProofs();
@@ -13,17 +14,9 @@ const ProofsList = () => {
     const [sortBy, setSortBy] = useState('recentes');
 
     const processedProofs = useMemo(() => {
+        // AGORA USAMOS A FUNÇÃO CENTRALIZADA
         let proofsWithStats = proofsList.map(proof => {
-            const totals = proof.results.reduce((acc, r) => {
-                acc.acertos += r.acertos;
-                acc.erros += r.erros;
-                acc.brancos += r.brancos;
-                return acc;
-            }, { acertos: 0, erros: 0, brancos: 0 });
-            const totalQuestoes = totals.acertos + totals.erros + totals.brancos;
-            const acertosLiquidos = totals.acertos - totals.erros;
-            // A porcentagem líquida é calculada aqui
-            const percentage = totalQuestoes > 0 ? (acertosLiquidos / totalQuestoes) : 0;
+            const { percentage } = calculatePerformance(proof); // <-- AQUI!
             return { ...proof, percentage };
         });
 
@@ -93,14 +86,12 @@ const ProofsList = () => {
                             <p className="text-gray-600">{proof.banca}</p>
                             <p className="text-gray-400 text-sm mb-4">{formatDate(proof.data)}</p>
 
-                            {/* --- CÓDIGO ADICIONADO --- */}
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                <p className="text-sm text-gray-500">Aproveitamento Líquido</p>
+                                <p className="text-sm text-gray-500">Aproveitamento</p>
                                 <p className="text-3xl font-bold text-gray-800">
                                     {formatPercent(proof.percentage)}
                                 </p>
                             </div>
-                            {/* --- FIM DO CÓDIGO ADICIONADO --- */}
 
                         </div>
                         <div className="px-6 pb-4 flex justify-end">

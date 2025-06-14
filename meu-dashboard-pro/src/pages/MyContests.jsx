@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useProofs } from '../hooks/useProofs';
-import { formatDate } from '../utils/formatters'; // Importa a função
+import { formatDate } from '../utils/formatters';
+import { calculatePerformance } from '../utils/calculators'; // <-- IMPORTA O NOVO CALCULADOR
 
 const MyContests = () => {
     const { proofsList } = useProofs();
@@ -22,15 +23,8 @@ const MyContests = () => {
 
         return filteredProofs
             .map(proof => {
-                const totals = proof.results.reduce((acc, r) => {
-                    acc.acertos += r.acertos;
-                    acc.erros += r.erros;
-                    acc.brancos += r.brancos;
-                    return acc;
-                }, { acertos: 0, erros: 0, brancos: 0 });
-                const totalQuestoes = totals.acertos + totals.erros + totals.brancos;
-                const acertosLiquidos = totals.acertos - totals.erros;
-                const percentage = totalQuestoes > 0 ? (acertosLiquidos / totalQuestoes) * 100 : 0;
+                // AGORA USAMOS A FUNÇÃO CENTRALIZADA
+                const { percentage } = calculatePerformance(proof); // <-- AQUI!
                 
                 const shortTitle = proof.titulo.split(' ')[0];
                 const formattedDate = formatDate(proof.data);
@@ -38,12 +32,12 @@ const MyContests = () => {
                 return { 
                     id: proof.id,
                     name: `${shortTitle} (${formattedDate})`,
-                    aproveitamento: parseFloat(percentage.toFixed(2)),
+                    aproveitamento: parseFloat((percentage * 100).toFixed(2)), // Usa a nova porcentagem
                     full_name: proof.titulo,
                     date: new Date(proof.data),
                 };
             })
-            .sort((a,b) => a.date - b.date); // Ordena pela data da prova
+            .sort((a,b) => a.date - b.date);
     }, [proofsList, filterBanca, filterAno]);
     
     return (
@@ -89,7 +83,7 @@ const MyContests = () => {
                             <Tooltip
                                 contentStyle={{backgroundColor: '#ffffff', border: '1px solid #cccccc', borderRadius: '0.5rem'}}
                                 labelStyle={{fontWeight: 'bold'}}
-                                formatter={(value, name, props) => [`${value.toFixed(2)}%`, `Aproveitamento Líquido em ${props.payload.full_name}`]}
+                                formatter={(value, name, props) => [`${value.toFixed(2)}%`, `Aproveitamento em ${props.payload.full_name}`]}
                             />
                             <Area type="monotone" dataKey="aproveitamento" stroke="#0d9488" fillOpacity={1} fill="url(#colorUv)" strokeWidth={2} />
                         </AreaChart>
