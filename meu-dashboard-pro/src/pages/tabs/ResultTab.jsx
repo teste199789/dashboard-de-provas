@@ -1,19 +1,23 @@
 import React, { useState, useMemo } from 'react';
-import * as api from '../../api/apiService';
 import StatsRow from '../../components/common/StatsRow';
-import { calculatePerformance } from '../../utils/calculators';
+import { useProofs } from '../../hooks/useProofs';
+import ScoreCard from '../../components/common/ScoreCard';
+import * as api from '../../api/apiService';
+
+const normalizeText = (text = '') => 
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const ResultTab = ({ proof, refreshProof }) => {
     const [isGrading, setIsGrading] = useState(false);
     const [error, setError] = useState(null);
+    const { handleGradeProof } = useProofs();
 
-    const handleGrade = async () => {
+    const onGradeClick = async () => {
         setIsGrading(true);
         setError(null);
         try {
-            await api.gradeProof(proof.id);
-            // A função refreshProof vai buscar os novos dados do 'proof' e causar uma re-renderização
-            await refreshProof(); 
+            await handleGradeProof(proof.id);
+            await refreshProof();
         } catch (err) {
             setError("Falha ao corrigir a prova. Verifique se todos os gabaritos e matérias foram preenchidos corretamente.");
             console.error("ERRO DETALHADO NO FRONTEND:", err);
@@ -22,42 +26,64 @@ const ResultTab = ({ proof, refreshProof }) => {
         }
     };
 
-    // Usamos o useMemo para recalcular os totais e percentuais sempre que o 'proof' (com os novos resultados) mudar.
-    const calculatedResults = useMemo(() => {
+    const displayData = useMemo(() => {
         if (!proof || proof.results.length === 0) {
-            return {
-                detailedResults: [],
-                totals: {},
-            };
+            return { scoreCards: [], detailedResults: [], totals: {} };
         }
 
-        const overallPerformance = calculatePerformance(proof);
+        const anuladasTotais = proof.results.reduce((sum, r) => sum + r.anuladas, 0);
+        const universoTotalValido = proof.totalQuestoes > 0 ? proof.totalQuestoes - anuladasTotais : 0;
 
-        // Mapeia os resultados para adicionar os campos que StatsRow precisa
+        // Lógica para os ScoreCards
+        const scores = {
+            cb: { pontuacao: 0, acertos: 0, erros: 0, brancos: 0 },
+            ce: { pontuacao: 0, acertos: 0, erros: 0, brancos: 0 }
+        };
+        proof.results.forEach(result => {
+            let pontuacaoMateria = result.acertos - result.erros;
+            const disciplinaNormalizada = normalizeText(result.disciplina);
+            const group = disciplinaNormalizada.includes('basico') ? 'cb' : (disciplinaNormalizada.includes('especifico') || disciplinaNormalizada.includes('especializado') ? 'ce' : null);
+            if (group) {
+                scores[group].pontuacao += pontuacaoMateria;
+                scores[group].acertos += result.acertos;
+                scores[group].erros += result.erros;
+                scores[group].brancos += result.brancos;
+            }
+        });
+        const acertosTotais = proof.results.reduce((sum, r) => sum + r.acertos, 0);
+        const errosTotais = proof.results.reduce((sum, r) => sum + r.erros, 0);
+        const pontuacaoTotal = acertosTotais - errosTotais;
+        
+        const scoreCards = [
+            { title: 'total', score: pontuacaoTotal, percentage: proof.aproveitamento || 0, details: { acertos: acertosTotais, erros: errosTotais, brancos: proof.results.reduce((sum, r) => sum + r.brancos, 0) }},
+            { title: 'c.b.', score: scores.cb.pontuacao, percentage: universoTotalValido > 0 ? scores.cb.pontuacao / universoTotalValido : 0, details: scores.cb },
+            { title: 'c.e.', score: scores.ce.pontuacao, percentage: universoTotalValido > 0 ? scores.ce.pontuacao / universoTotalValido : 0, details: scores.ce }
+        ];
+        
+        // Lógica para a Tabela Detalhada
+        const subjectQuestionMap = new Map(proof.subjects.map(s => [s.nome, s.questoes]));
         const detailedResults = proof.results.map(item => {
-            const totalQuestoes = item.acertos + item.erros + item.brancos;
+            const totalQuestoesNaMateria = subjectQuestionMap.get(item.disciplina) || 0;
             const acertosLiquidos = item.acertos - item.erros;
-            const percentualBruta = totalQuestoes > 0 ? item.acertos / totalQuestoes : 0;
-            const percentualLiquidos = totalQuestoes > 0 ? Math.max(0, acertosLiquidos / totalQuestoes) : 0;
-            return { ...item, totalQuestoes, acertosLiquidos, percentualBruta, percentualLiquidos };
+            const universoValidoMateria = totalQuestoesNaMateria - item.anuladas;
+
+            // --- FÓRMULA CORRIGIDA PARA CADA LINHA DA TABELA ---
+            const percentualBruta = universoValidoMateria > 0 ? item.acertos / universoValidoMateria : 0;
+            const percentualLiquidos = totalQuestoesNaMateria > 0 ? Math.max(0, acertosLiquidos / totalQuestoesNaMateria) : 0;
+            
+            return { ...item, totalQuestoes: totalQuestoesNaMateria, acertosLiquidos, percentualBruta, percentualLiquidos };
         });
 
-        const acertosTotais = detailedResults.reduce((sum, r) => sum + r.acertos, 0);
-        const errosTotais = detailedResults.reduce((sum, r) => sum + r.erros, 0);
-        
         const totals = {
-            disciplina: 'Total',
-            acertos: acertosTotais,
-            erros: errosTotais,
-            brancos: detailedResults.reduce((sum, r) => sum + r.brancos, 0),
-            anuladas: detailedResults.reduce((sum, r) => sum + r.anuladas, 0),
-            totalQuestoes: proof.totalQuestoes,
-            acertosLiquidos: acertosTotais - errosTotais,
-            percentualLiquidos: overallPerformance.percentage,
-            percentualBruta: proof.totalQuestoes > 0 ? acertosTotais / proof.totalQuestoes : 0,
+            disciplina: 'Total', acertos: acertosTotais, erros: errosTotais,
+            brancos: proof.results.reduce((sum, r) => sum + r.brancos, 0),
+            anuladas: anuladasTotais, totalQuestoes: proof.totalQuestoes,
+            acertosLiquidos: pontuacaoTotal,
+            percentualLiquidos: proof.aproveitamento,
+            percentualBruta: universoTotalValido > 0 ? acertosTotais / universoTotalValido : 0,
         };
 
-        return { detailedResults, totals };
+        return { scoreCards, detailedResults, totals };
 
     }, [proof]);
 
@@ -65,30 +91,39 @@ const ResultTab = ({ proof, refreshProof }) => {
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-800">Resultado e Análise</h3>
-                <button onClick={handleGrade} disabled={isGrading} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                <h2 className="text-2xl font-bold text-gray-800">Resultado e Análise</h2>
+                <button onClick={onGradeClick} disabled={isGrading} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 disabled:opacity-50">
                     {isGrading ? 'Corrigindo...' : 'Corrigir e Atualizar Análise'}
                 </button>
             </div>
-
             {error && <div className="my-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
-
             {proof.results.length === 0 ? (
                 <div className="text-center text-gray-500 py-10 bg-gray-50 rounded-lg">
                     <p>Nenhum resultado calculado ainda.</p>
-                    <p className="text-sm mt-2">Preencha os gabaritos e clique no botão acima para gerar a análise.</p>
                 </div>
             ) : (
-                <div className="text-sm text-gray-800 border rounded-lg overflow-hidden">
-                    <div className="hidden md:grid grid-cols-9 text-center font-semibold bg-gray-200 py-3 border-b-2 border-gray-300">
-                        <p className="text-left pl-4">Matéria</p>
-                        <p>Acertos</p><p>Erros</p><p>Brancos</p><p>Anuladas</p>
-                        <p>Questões</p><p>Líquidos</p><p>% Bruta</p><p>% Líquidos</p>
+                <div className="space-y-8">
+                    <div className="bg-gray-100 rounded-lg p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x">
+                            {displayData.scoreCards.map(card => (
+                                <ScoreCard key={card.title} {...card} />
+                            ))}
+                        </div>
                     </div>
-                    <div className="divide-y divide-gray-200">
-                        {calculatedResults.detailedResults.map((item, index) => <StatsRow key={index} item={item} />)}
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Desempenho Detalhado por Matéria</h3>
+                        <div className="text-sm text-gray-800 border rounded-lg overflow-hidden">
+                            <div className="hidden md:grid grid-cols-9 text-center font-semibold bg-gray-200 py-3 border-b-2 border-gray-300">
+                                <p className="text-left pl-4">Matéria</p>
+                                <p>Acertos</p><p>Erros</p><p>Brancos</p><p>Anuladas</p>
+                                <p>Questões</p><p>Líquidos</p><p>% Bruta</p><p>% Líquidos</p>
+                            </div>
+                            <div className="divide-y divide-gray-200">
+                                {displayData.detailedResults.map((item, index) => <StatsRow key={index} item={item} />)}
+                            </div>
+                            <StatsRow item={displayData.totals} isFooter={true} />
+                        </div>
                     </div>
-                    <StatsRow item={calculatedResults.totals} isFooter={true} />
                 </div>
             )}
         </div>

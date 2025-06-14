@@ -13,8 +13,10 @@ model Proof {
   titulo             String
   banca              String
   data               DateTime
-  totalQuestoes      Int?
-  tipoPontuacao      String?
+  totalQuestoes      Int   
+  tipoPontuacao      String?   
+  aproveitamento     Float?   
+
   gabaritoPreliminar String?
   gabaritoDefinitivo String?
   userAnswers        String?

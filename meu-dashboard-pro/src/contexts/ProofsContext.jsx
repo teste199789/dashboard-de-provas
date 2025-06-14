@@ -1,128 +1,137 @@
 import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
-import * as api from '../api/apiService'; // Nosso serviço de API
+import * as api from '../api/apiService';
 
 export const ProofsContext = createContext();
 
 export const ProofsProvider = ({ children }) => {
     const [proofsList, setProofsList] = useState([]);
-    const [analysis, setAnalysis] = useState('');
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [modalState, setModalState] = useState({ isOpen: false, proofId: null });
+    const [analysis, setAnalysis] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const fetchProofs = useCallback(async () => {
-        setIsLoading(true);
         setError(null);
         try {
-            // USANDO A API REAL AGORA
             const data = await api.getProofs();
             setProofsList(data);
         } catch (e) {
             console.error("Erro ao buscar dados:", e);
-            setError("Não foi possível carregar os dados. Verifique o console ou o servidor backend.");
+            setError("Não foi possível carregar os dados.");
         } finally {
             setIsLoading(false);
         }
     }, []);
 
     useEffect(() => {
+        setIsLoading(true);
         fetchProofs();
     }, [fetchProofs]);
 
-     const handleAddProof = async (newProofData) => {
+    const handleAddProof = async (newProofData) => {
         try {
-            // A API agora retorna a prova que foi criada
             const newProof = await api.addProof(newProofData);
-            fetchProofs(); // Atualiza a lista geral
-            return newProof; // Retorna a prova para que possamos obter o ID
+            await fetchProofs();
+            return newProof;
         } catch (error) {
-            console.error("Erro ao adicionar prova:", error);
             setError("Falha ao criar a prova.");
-            return null;
+            throw error;
         }
     };
+
+    const handleGradeProof = async (proofId) => {
+        try {
+            await api.gradeProof(proofId);
+            const updatedProof = await api.getProofById(proofId);
+            setProofsList(currentList => 
+                currentList.map(p => 
+                    p.id === proofId ? updatedProof : p
+                )
+            );
+            return true;
+        } catch(err) {
+            throw err;
+        }
+    };
+
+    const openDeleteModal = (id) => setModalState({ isOpen: true, proofId: id });
+    const closeDeleteModal = () => setModalState({ isOpen: false, proofId: null });
 
     const handleDeleteProof = async () => {
         const id = modalState.proofId;
         if (!id) return;
-
         try {
-            // USANDO A API REAL AGORA
             await api.deleteProof(id);
-            fetchProofs(); // Atualiza a lista com os dados do servidor
             closeDeleteModal();
+            fetchProofs();
         } catch (error) {
-            console.error("Erro ao deletar prova:", error);
             setError("Falha ao deletar a prova.");
             closeDeleteModal();
         }
     };
-    
-    // O resto do arquivo continua igual...
-    const openDeleteModal = (id) => setModalState({ isOpen: true, proofId: id });
-    const closeDeleteModal = () => setModalState({ isOpen: false, proofId: null });
 
     const consolidatedData = useMemo(() => {
-        const initial = {
-            'Conhecimentos Básicos': { id: 1, disciplina: 'Conhecimentos Básicos', acertos: 0, erros: 0, brancos: 0, anuladas: 0 },
-            'Conhecimentos Específicos': { id: 2, disciplina: 'Conhecimentos Específicos', acertos: 0, erros: 0, brancos: 0, anuladas: 0 },
-            'Conhecimentos Especializados': { id: 3, disciplina: 'Conhecimentos Especializados', acertos: 0, erros: 0, brancos: 0, anuladas: 0 },
-        };
+        const disciplineTotals = {};
 
         proofsList.forEach(proof => {
-            proof.results.forEach(result => {
-                if (initial[result.disciplina]) {
-                    initial[result.disciplina].acertos += result.acertos;
-                    initial[result.disciplina].erros += result.erros;
-                    initial[result.disciplina].brancos += result.brancos;
-                    initial[result.disciplina].anuladas += result.anuladas;
-                }
-            });
-        });
-        
-        const processedDisciplinas = Object.values(initial).map(item => {
-            const totalQuestoes = item.acertos + item.erros + item.brancos;
-            const acertosLiquidos = item.acertos - item.erros;
-            const percentualBruta = totalQuestoes > 0 ? item.acertos / totalQuestoes : 0;
-            const percentualLiquidos = totalQuestoes > 0 ? (acertosLiquidos > 0 ? acertosLiquidos / totalQuestoes : 0) : 0;
-            return { ...item, totalQuestoes, acertosLiquidos, percentualBruta, percentualLiquidos };
+            if (proof.results && proof.results.length > 0 && proof.subjects && proof.subjects.length > 0) {
+                const subjectQuestionMap = new Map(proof.subjects.map(s => [s.nome, s.questoes]));
+                proof.results.forEach(result => {
+                    const { disciplina, acertos, erros, brancos, anuladas } = result;
+                    if (!disciplineTotals[disciplina]) {
+                        disciplineTotals[disciplina] = { acertos: 0, erros: 0, brancos: 0, anuladas: 0, totalQuestoes: 0 };
+                    }
+                    disciplineTotals[disciplina].acertos += acertos;
+                    disciplineTotals[disciplina].erros += erros;
+                    disciplineTotals[disciplina].brancos += brancos;
+                    disciplineTotals[disciplina].anuladas += anuladas;
+                    disciplineTotals[disciplina].totalQuestoes += subjectQuestionMap.get(disciplina) || 0;
+                });
+            }
         });
 
-         const totais = processedDisciplinas.reduce((acc, current) => {
+        const processedDisciplinas = Object.entries(disciplineTotals).map(([nome, totais], index) => {
+            const acertosComAnuladas = totais.acertos; // 'acertos' já inclui os pontos das anuladas
+            const pontuacaoLiquida = acertosComAnuladas - totais.erros;
+            const universoValido = totais.totalQuestoes - totais.anuladas;
+
+            return {
+                id: index,
+                disciplina: nome,
+                ...totais,
+                acertosLiquidos: pontuacaoLiquida,
+                percentualBruta: universoValido > 0 ? acertosComAnuladas / universoValido : 0,
+                percentualLiquidos: totais.totalQuestoes > 0 ? Math.max(0, pontuacaoLiquida / totais.totalQuestoes) : 0,
+            };
+        });
+
+        const totaisGerais = processedDisciplinas.reduce((acc, current) => {
             acc.acertos += current.acertos;
             acc.erros += current.erros;
             acc.brancos += current.brancos;
             acc.anuladas += current.anuladas;
             acc.totalQuestoes += current.totalQuestoes;
-            acc.acertosLiquidos += current.acertosLiquidos;
             return acc;
-          }, { disciplina: 'Total', acertos: 0, erros: 0, brancos: 0, anuladas: 0, totalQuestoes: 0, acertosLiquidos: 0 });
-          
-          totais.percentualBruta = totais.totalQuestoes > 0 ? totais.acertos / totais.totalQuestoes : 0;
-          totais.percentualLiquidos = totais.totalQuestoes > 0 ? (totais.acertosLiquidos > 0 ? totais.acertosLiquidos / totais.totalQuestoes : 0) : 0;
+        }, { disciplina: 'Total', acertos: 0, erros: 0, brancos: 0, anuladas: 0, totalQuestoes: 0 });
 
-        return { disciplinas: processedDisciplinas, totais };
+        const pontuacaoLiquidaGeral = totaisGerais.acertos - totaisGerais.erros;
+        const universoTotalValido = totaisGerais.totalQuestoes - totaisGerais.anuladas;
+        
+        totaisGerais.acertosLiquidos = pontuacaoLiquidaGeral;
+        // --- FÓRMULA FINAL CORRIGIDA PARA O TOTAL ---
+        totaisGerais.percentualBruta = universoTotalValido > 0 ? totaisGerais.acertos / universoTotalValido : 0;
+        totaisGerais.percentualLiquidos = totaisGerais.totalQuestoes > 0 ? Math.max(0, pontuacaoLiquidaGeral / totaisGerais.totalQuestoes) : 0;
+
+        return { disciplinas: processedDisciplinas, totais: totaisGerais };
     }, [proofsList]);
 
-    const handleAnalysisRequest = async () => {
-        setIsAnalyzing(true);
-        setAnalysis('');
-        const { disciplinas, totais } = consolidatedData;
-        const result = await api.getAIAnalysis(disciplinas, totais);
-        setAnalysis(result);
-        setIsAnalyzing(false);
-    };
     
     const value = {
-        proofsList, analysis, isAnalyzing, isLoading, error, modalState, consolidatedData,
-        fetchProofs, handleAddProof, openDeleteModal, closeDeleteModal, handleDeleteProof,
-        handleAnalysisRequest, clearAnalysis: () => setAnalysis('')
+        proofsList, consolidatedData, isLoading, error, modalState, fetchProofs, handleAddProof, 
+        openDeleteModal, closeDeleteModal, handleDeleteProof, handleGradeProof,
+        analysis, isAnalyzing,
     };
 
-    return (
-        <ProofsContext.Provider value={value}>
-            {children}
-        </ProofsContext.Provider>
-    );
+    return <ProofsContext.Provider value={value}>{children}</ProofsContext.Provider>;
 };

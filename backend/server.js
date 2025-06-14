@@ -1,40 +1,22 @@
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const { corrigirProva } = require('./utils/correcao');
+const { corrigirProva, calculateOverallPerformance } = require('./utils/correcao');
 
-const prisma = new PrismaClient();
 const app = express();
+const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
 
 const PORT = 3001;
 
-// --- ROTAS DE PROVAS ---
-app.post('/api/proofs', async (req, res) => {
-    try {
-        const { titulo, banca, data, totalQuestoes, tipoPontuacao } = req.body;
-        const newProof = await prisma.proof.create({
-            data: { 
-                titulo, 
-                banca, 
-                data: new Date(data),
-                totalQuestoes: parseInt(totalQuestoes),
-                tipoPontuacao
-            },
-        });
-        res.status(201).json(newProof);
-    } catch (error) {
-        console.error("ERRO AO CRIAR PROVA:", error);
-        res.status(500).json({ error: "Não foi possível criar a prova." });
-    }
-});
-
+// --- ROTA PRINCIPAL ATUALIZADA ---
 app.get('/api/proofs', async (req, res) => {
     try {
         const proofs = await prisma.proof.findMany({
-            include: { results: true },
+            // AGORA INCLUI OS RESULTADOS E AS MATÉRIAS
+            include: { results: true, subjects: true },
             orderBy: { data: 'desc' },
         });
         res.json(proofs);
@@ -43,28 +25,35 @@ app.get('/api/proofs', async (req, res) => {
     }
 });
 
-// GET /api/proofs/:id
+// O resto das rotas continua igual...
+app.post('/api/proofs', async (req, res) => {
+    try {
+        const { titulo, banca, data, totalQuestoes, tipoPontuacao } = req.body;
+        const newProof = await prisma.proof.create({
+            data: { 
+                titulo, banca, data: new Date(data),
+                totalQuestoes: parseInt(totalQuestoes),
+                tipoPontuacao
+            },
+        });
+        res.status(201).json(newProof);
+    } catch (error) {
+        res.status(500).json({ error: "Não foi possível criar a prova." });
+    }
+});
 app.get('/api/proofs/:id', async (req, res) => {
-    const { id } = req.params; // Movemos a declaração do 'id' para fora do 'try'
-    console.log(`[Backend] Rota GET /api/proofs/:id chamada. Buscando ID: ${id}`);
+    const { id } = req.params;
     try {
         const proof = await prisma.proof.findUnique({
             where: { id: parseInt(id) },
-            include: { results: true, subjects: { orderBy: { id: 'asc' } } },
+            include: { results: { orderBy: { id: 'asc' } }, subjects: { orderBy: { id: 'asc' } } },
         });
-        if (!proof) { 
-            console.warn(`[Backend] Prova com ID ${id} não encontrada no banco de dados.`);
-            return res.status(404).json({ error: "Prova não encontrada." }); 
-        }
-        console.log(`[Backend] Prova com ID ${id} encontrada e retornada.`);
+        if (!proof) { return res.status(404).json({ error: "Prova não encontrada." }); }
         res.json(proof);
     } catch (error) {
-        // AGORA A VARIÁVEL 'id' ESTÁ ACESSÍVEL AQUI
-        console.error(`[Backend] Erro ao buscar prova com ID ${id}:`, error);
         res.status(500).json({ error: "Não foi possível buscar a prova." });
     }
 });
-
 app.delete('/api/proofs/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -74,45 +63,33 @@ app.delete('/api/proofs/:id', async (req, res) => {
         res.status(500).json({ error: "Não foi possível deletar a prova." });
     }
 });
-
-// --- ROTAS PARA SALVAR DETALHES ---
 app.put('/api/proofs/:id/details', async (req, res) => {
     try {
         const { id } = req.params;
-        const { gabaritoPreliminar, gabaritoDefinitivo, userAnswers, subjects } = req.body;
+        const { gabaritoPreliminar, gabaritoDefinitivo, userAnswers, subjects, totalQuestoes } = req.body;
         const dataToUpdate = {};
         if (gabaritoPreliminar !== undefined) dataToUpdate.gabaritoPreliminar = gabaritoPreliminar;
         if (gabaritoDefinitivo !== undefined) dataToUpdate.gabaritoDefinitivo = gabaritoDefinitivo;
         if (userAnswers !== undefined) dataToUpdate.userAnswers = userAnswers;
+        if (totalQuestoes !== undefined) dataToUpdate.totalQuestoes = parseInt(totalQuestoes);
         
         if (subjects) {
             let currentQuestion = 1;
             const subjectsWithRanges = subjects.map(s => {
                 const start = currentQuestion;
-                const end = currentQuestion + parseInt(s.questoes) - 1;
+                const end = currentQuestion + (parseInt(s.questoes) || 0) - 1;
                 currentQuestion = end + 1;
-                return {
-                    nome: s.nome,
-                    questoes: parseInt(s.questoes),
-                    questaoInicio: start,
-                    questaoFim: end
-                };
+                return { nome: s.nome, questoes: parseInt(s.questoes) || 0, questaoInicio: start, questaoFim: end };
             });
-
             await prisma.subject.deleteMany({ where: { proofId: parseInt(id) } });
             dataToUpdate.subjects = { create: subjectsWithRanges };
         }
-
         const updatedProof = await prisma.proof.update({ where: { id: parseInt(id) }, data: dataToUpdate });
         res.json(updatedProof);
     } catch (error) {
-        console.error("ERRO AO SALVAR DETALHES:", error);
         res.status(500).json({ error: "Não foi possível salvar os detalhes da prova." });
     }
 });
-
-
-// --- ROTA DE CORREÇÃO ---
 app.post('/api/proofs/:id/grade', async (req, res) => {
     try {
         const { id } = req.params;
@@ -121,26 +98,29 @@ app.post('/api/proofs/:id/grade', async (req, res) => {
             where: { id: proofId },
             include: { subjects: true },
         });
-
-        if (!proofData.userAnswers || !proofData.gabaritoDefinitivo) {
-            return res.status(400).json({ error: "Gabarito do usuário ou da banca não preenchido." });
+        if (!proofData || !proofData.userAnswers || !proofData.gabaritoDefinitivo) {
+            return res.status(400).json({ error: "Gabarito do usuário, da banca ou dados da prova não preenchidos." });
         }
-        
-        const resultadosPorMateria = corrigirProva(proofData);
-
+        if (!proofData.subjects || proofData.subjects.length === 0) {
+            return res.status(400).json({ error: "As matérias do concurso não foram definidas." });
+        }
+        const { resultados: resultadosPorMateria } = corrigirProva(proofData);
+        const performanceGeral = calculateOverallPerformance(proofData, resultadosPorMateria);
+        await prisma.proof.update({
+            where: { id: proofId },
+            data: { aproveitamento: performanceGeral.percentage }
+        });
+        const dataToCreate = resultadosPorMateria.map(r => ({ ...r, proofId }));
         await prisma.$transaction([
             prisma.result.deleteMany({ where: { proofId: proofId } }),
-            prisma.result.createMany({ data: resultadosPorMateria.map(r => ({ ...r, proofId })) }),
+            prisma.result.createMany({ data: dataToCreate }),
         ]);
-
         res.status(200).json({ message: "Prova corrigida com sucesso!" });
-
     } catch(error) {
         console.error("ERRO AO CORRIGIR PROVA:", error);
         res.status(500).json({ error: "Falha no processo de correção." });
     }
 });
-
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor backend rodando na porta ${PORT}`);
