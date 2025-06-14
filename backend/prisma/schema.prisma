@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,12 +8,29 @@ datasource db {
 }
 
 model Proof {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  titulo    String
-  banca     String
-  data      DateTime // <-- Campo atualizado
+  id                 Int       @id @default(autoincrement())
+  createdAt          DateTime  @default(now())
+  titulo             String
+  banca              String
+  data               DateTime
+  totalQuestoes      Int?      // <-- NOVO: Quantidade total de questões
+  tipoPontuacao      String?   // <-- NOVO: 'liquida' ou 'bruta'
+  gabaritoPreliminar String?
+  gabaritoDefinitivo String?
+  userAnswers        String?
+
   results   Result[]
+  subjects  Subject[]
+}
+
+// NOVO MODELO
+model Subject {
+  id          Int    @id @default(autoincrement())
+  nome        String
+  questoes    Int
+
+  proof     Proof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  proofId   Int
 }
 
 model Result {
@@ -26,6 +40,7 @@ model Result {
   erros       Int
   brancos     Int
   anuladas    Int
-  proof       Proof  @relation(fields: [proofId], references: [id], onDelete: Cascade)
-  proofId     Int
+
+  proof     Proof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  proofId   Int
 }

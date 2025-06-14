@@ -1,229 +1,77 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProofs } from '../hooks/useProofs';
-import TrashIcon from '../components/icons/TrashIcon';
 
-const BANCAS_PREDEFINIDAS = ["Cespe/Cebraspe", "FGV", "FCC"];
-
-const DisciplinaForm = React.memo(({ disciplina, index, onChange, onRemove, disableRemove }) => (
-    <div className="p-4 border border-gray-200 rounded-lg space-y-3 bg-gray-50">
-        <div className="flex items-center gap-4">
-            <input
-                name="nome"
-                type="text"
-                value={disciplina.nome}
-                onChange={e => onChange(disciplina.id, e)}
-                placeholder={`Matéria ${index + 1}`}
-                className="flex-grow p-3 border border-gray-300 rounded-lg"
-                required
-            />
-            <button
-                type="button"
-                onClick={() => onRemove(disciplina.id)}
-                disabled={disableRemove}
-                className="p-2 text-red-500 rounded-full hover:bg-red-100 disabled:opacity-50"
-                aria-label="Remover Matéria"
-            >
-                <TrashIcon className="w-5 h-5" />
-            </button>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <input
-                name="acertos"
-                type="number"
-                value={disciplina.acertos}
-                onChange={e => onChange(disciplina.id, e)}
-                placeholder="Acertos"
-                min="0"
-                className="p-3 border border-gray-300 rounded-lg"
-                aria-label="Acertos"
-            />
-            <input
-                name="erros"
-                type="number"
-                value={disciplina.erros}
-                onChange={e => onChange(disciplina.id, e)}
-                placeholder="Erros"
-                min="0"
-                className="p-3 border border-gray-300 rounded-lg"
-                aria-label="Erros"
-            />
-            <input
-                name="brancos"
-                type="number"
-                value={disciplina.brancos}
-                onChange={e => onChange(disciplina.id, e)}
-                placeholder="Brancos"
-                min="0"
-                className="p-3 border border-gray-300 rounded-lg"
-                aria-label="Brancos"
-            />
-            <input
-                name="anuladas"
-                type="number"
-                value={disciplina.anuladas}
-                onChange={e => onChange(disciplina.id, e)}
-                placeholder="Anuladas"
-                min="0"
-                className="p-3 border border-gray-300 rounded-lg"
-                aria-label="Anuladas"
-            />
-        </div>
-    </div>
-));
+const BANCAS_PREDEFINIDAS = ["Cespe/Cebraspe", "FGV", "FCC", "Outra"];
 
 const AddProof = () => {
     const navigate = useNavigate();
-    const { handleAddProof } = useProofs();
+    const { handleAddProof } = useProofs(); // Usaremos a mesma função, mas ela fará algo novo
     const [isSaving, setIsSaving] = useState(false);
-    const [prova, setProva] = useState({ banca: '', data: '', titulo: '' });
-    const [bancaSelecionada, setBancaSelecionada] = useState('');
-    const [disciplinas, setDisciplinas] = useState([
-        { id: 1, nome: '', acertos: '', erros: '', brancos: '', anuladas: '' }
-    ]);
-
-    const handleAdicionarDisciplina = useCallback(() => {
-        setDisciplinas(ds => [
-            ...ds,
-            { id: Date.now(), nome: '', acertos: '', erros: '', brancos: '', anuladas: '' }
-        ]);
-    }, []);
-
-    const handleRemoverDisciplina = useCallback((id) => {
-        setDisciplinas(ds => ds.length > 1 ? ds.filter(d => d.id !== id) : ds);
-    }, []);
-
-    const handleDisciplinaChange = useCallback((id, event) => {
-        const { name, value } = event.target;
-        setDisciplinas(ds =>
-            ds.map(d => (d.id === id ? { ...d, [name]: value } : d))
-        );
-    }, []);
-
-    const handleBancaChange = (e) => {
-        const valor = e.target.value;
-        setBancaSelecionada(valor);
-        setProva(prev => ({ ...prev, banca: valor !== 'Outra' ? valor : '' }));
-    };
+    
+    const [titulo, setTitulo] = useState('');
+    const [banca, setBanca] = useState('');
+    const [data, setData] = useState('');
+    const [totalQuestoes, setTotalQuestoes] = useState('');
+    const [tipoPontuacao, setTipoPontuacao] = useState('liquida');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSaving(true);
+        const newProofData = { titulo, banca, data, totalQuestoes, tipoPontuacao };
+        
+        // A função handleAddProof agora só cria a prova e retorna o ID
+        const newProof = await handleAddProof(newProofData); 
 
-        const results = disciplinas
-            .filter(d => d.nome.trim() !== '')
-            .map(d => ({
-                disciplina: d.nome,
-                acertos: parseInt(d.acertos) || 0,
-                erros: parseInt(d.erros) || 0,
-                brancos: parseInt(d.brancos) || 0,
-                anuladas: parseInt(d.anuladas) || 0,
-            }));
-
-        if (results.length === 0) {
-            alert('Adicione pelo menos uma matéria.');
-            setIsSaving(false);
-            return;
-        }
-
-        const newProof = {
-            titulo: prova.titulo,
-            banca: prova.banca,
-            data: prova.data,
-            results,
-        };
-
-        const success = await handleAddProof(newProof);
         setIsSaving(false);
-        if (success) navigate('/minhas-provas');
+        if (newProof && newProof.id) {
+            // Após criar, redireciona para a nova página de gerenciamento
+            navigate(`/minhas-provas/${newProof.id}`); 
+        }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-xl p-6 md:p-8">
-            <h2 className="text-2xl font-bold text-gray-700 mb-6">Cadastrar Nova Prova</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <input
-                    required
-                    type="text"
-                    value={prova.titulo}
-                    onChange={e => setProva({ ...prova, titulo: e.target.value })}
-                    placeholder="Nome da Prova (Ex: Analista Suporte STJ)"
-                    className="md:col-span-2 p-3 border border-gray-300 rounded-lg"
-                />
+        <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-xl p-6 md:p-8 max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-gray-700 mb-6">Cadastrar Novo Concurso</h2>
+            
+            <div className="space-y-4">
                 <div>
-                    <label htmlFor="banca-select" className="block text-sm font-medium text-gray-700 mb-1">Banca</label>
-                    <select
-                        id="banca-select"
-                        required
-                        value={bancaSelecionada}
-                        onChange={handleBancaChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-white"
-                    >
+                    <label htmlFor="titulo" className="block text-sm font-medium text-gray-700">Título do Concurso</label>
+                    <input id="titulo" required type="text" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Analista de TI - STJ" className="mt-1 w-full p-3 border border-gray-300 rounded-lg"/>
+                </div>
+                
+                <div>
+                    <label htmlFor="banca" className="block text-sm font-medium text-gray-700">Banca</label>
+                    <select id="banca" required value={banca} onChange={e => setBanca(e.target.value)} className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white">
                         <option value="" disabled>Selecione uma banca</option>
                         {BANCAS_PREDEFINIDAS.map(b => <option key={b} value={b}>{b}</option>)}
-                        <option value="Outra">Outra...</option>
                     </select>
                 </div>
-                <div>
-                    <label htmlFor="data-input" className="block text-sm font-medium text-gray-700 mb-1">Data da Prova</label>
-                    <input
-                        id="data-input"
-                        required
-                        type="date"
-                        value={prova.data}
-                        onChange={e => setProva({ ...prova, data: e.target.value })}
-                        className="w-full p-3 border border-gray-300 rounded-lg"
-                    />
-                </div>
-                {bancaSelecionada === 'Outra' && (
-                    <div className="md:col-span-2">
-                        <label htmlFor="outra-banca-input" className="block text-sm font-medium text-gray-700 mb-1">Qual banca?</label>
-                        <input
-                            id="outra-banca-input"
-                            required
-                            type="text"
-                            value={prova.banca}
-                            onChange={e => setProva({ ...prova, banca: e.target.value })}
-                            placeholder="Digite o nome da nova banca"
-                            className="w-full p-3 border border-gray-300 rounded-lg"
-                        />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="data" className="block text-sm font-medium text-gray-700">Data da Prova</label>
+                        <input id="data" required type="date" value={data} onChange={e => setData(e.target.value)} className="mt-1 w-full p-3 border border-gray-300 rounded-lg" />
                     </div>
-                )}
+                    <div>
+                        <label htmlFor="totalQuestoes" className="block text-sm font-medium text-gray-700">Nº Total de Questões</label>
+                        <input id="totalQuestoes" required type="number" min="1" value={totalQuestoes} onChange={e => setTotalQuestoes(e.target.value)} className="mt-1 w-full p-3 border border-gray-300 rounded-lg" />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Método de Pontuação</label>
+                    <select value={tipoPontuacao} onChange={e => setTipoPontuacao(e.target.value)} className="mt-1 w-full p-3 border border-gray-300 rounded-lg bg-white">
+                        <option value="liquida">1 Errada Anula 1 Certa (Padrão Cespe)</option>
+                        <option value="bruta">Apenas Acertos Contam (Padrão Múltipla Escolha)</option>
+                    </select>
+                </div>
             </div>
-            <div className="space-y-4">
-                <h3 className="text-xl font-bold text-gray-700 mb-2">Matérias e Resultados</h3>
-                {disciplinas.map((disciplina, index) => (
-                    <DisciplinaForm
-                        key={disciplina.id}
-                        disciplina={disciplina}
-                        index={index}
-                        onChange={handleDisciplinaChange}
-                        onRemove={handleRemoverDisciplina}
-                        disableRemove={disciplinas.length <= 1}
-                    />
-                ))}
-                <button
-                    type="button"
-                    onClick={handleAdicionarDisciplina}
-                    className="w-full font-semibold text-teal-600 border-2 border-dashed border-teal-400 rounded-lg py-3 hover:bg-teal-50 transition"
-                >
-                    + Adicionar Matéria
-                </button>
-            </div>
+            
             <div className="flex justify-end mt-8">
-                <button
-                    type="button"
-                    onClick={() => navigate(-1)}
-                    className="text-gray-600 font-bold py-3 px-6 mr-4 rounded-lg hover:bg-gray-200 transition"
-                >
-                    Voltar
-                </button>
-                <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="bg-teal-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-teal-600 transition shadow-md"
-                >
-                    {isSaving ? 'Salvando...' : 'Salvar Prova'}
+                 <button type="button" onClick={() => navigate(-1)} className="text-gray-600 font-bold py-3 px-6 mr-4 rounded-lg hover:bg-gray-200 transition">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="bg-teal-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-teal-600">
+                    {isSaving ? 'Salvando...' : 'Criar e Avançar'}
                 </button>
             </div>
         </form>

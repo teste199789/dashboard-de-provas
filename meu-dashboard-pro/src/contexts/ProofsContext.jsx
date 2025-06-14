@@ -30,16 +30,16 @@ export const ProofsProvider = ({ children }) => {
         fetchProofs();
     }, [fetchProofs]);
 
-    const handleAddProof = async (newProof) => {
+     const handleAddProof = async (newProofData) => {
         try {
-            // USANDO A API REAL AGORA
-            await api.addProof(newProof);
-            fetchProofs(); // Atualiza a lista com os dados do servidor
-            return true;
+            // A API agora retorna a prova que foi criada
+            const newProof = await api.addProof(newProofData);
+            fetchProofs(); // Atualiza a lista geral
+            return newProof; // Retorna a prova para que possamos obter o ID
         } catch (error) {
             console.error("Erro ao adicionar prova:", error);
-            setError("Falha ao salvar a prova.");
-            return false;
+            setError("Falha ao criar a prova.");
+            return null;
         }
     };
 

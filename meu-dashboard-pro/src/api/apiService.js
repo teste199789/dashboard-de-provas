@@ -41,6 +41,17 @@ export const getProofById = async (id) => {
     return response.json();
 };
 
+export const updateProofDetails = async (id, details) => {
+    const response = await fetch(`${API_URL}/proofs/${id}/details`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(details),
+    });
+    if (!response.ok) {
+        throw new Error(`Erro de HTTP! Status: ${response.status}`);
+    }
+    return response.json();
+};
 // --- Função para a API da Gemini ---
 
 export const getAIAnalysis = async (disciplinas, totais) => {

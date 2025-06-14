@@ -1,111 +1,121 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../api/apiService';
-import { useProofs } from '../hooks/useProofs';
-import StatsRow from '../components/common/StatsRow';
+import { formatDate } from '../utils/formatters';
 import TrashIcon from '../components/icons/TrashIcon';
-import { formatDate } from '../utils/formatters'; // Importa a função de formatação
 
-const ProofDetail = () => {
-    const { proofId } = useParams();
-    const navigate = useNavigate();
-    const { openDeleteModal } = useProofs();
+// Componente para a Aba de Informações (pode ficar no mesmo arquivo ou ser separado)
+const InfoTab = ({ proof, refreshProof }) => {
+    const [subjects, setSubjects] = useState(proof.subjects || []);
 
-    const [proof, setProof] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const handleAddSubject = () => {
+        setSubjects([...subjects, { nome: '', questoes: '' }]);
+    };
 
-    useEffect(() => {
-        const fetchProof = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const data = await api.getProofById(proofId);
-                setProof(data);
-            } catch (err) {
-                setError("Não foi possível carregar os detalhes da prova.");
-                console.error(err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+    const handleSubjectChange = (index, field, value) => {
+        const updatedSubjects = [...subjects];
+        updatedSubjects[index][field] = value;
+        setSubjects(updatedSubjects);
+    };
 
-        fetchProof();
-    }, [proofId]);
+    const handleRemoveSubject = (index) => {
+        const updatedSubjects = subjects.filter((_, i) => i !== index);
+        setSubjects(updatedSubjects);
+    };
 
-    const proofTotals = useMemo(() => {
-        if (!proof) return null;
+    const handleSaveChanges = async () => {
+        const subjectsToSave = subjects
+            .filter(s => s.nome && s.questoes)
+            .map(s => ({ nome: s.nome, questoes: parseInt(s.questoes) }));
         
-        const processedData = proof.results.map(item => {
-            const totalQuestoes = item.acertos + item.erros + item.brancos;
-            const acertosLiquidos = item.acertos - item.erros;
-            const percentualBruta = totalQuestoes > 0 ? item.acertos / totalQuestoes : 0;
-            const percentualLiquidos = totalQuestoes > 0 ? (acertosLiquidos > 0 ? acertosLiquidos / totalQuestoes : 0) : 0;
-            return { ...item, totalQuestoes, acertosLiquidos, percentualBruta, percentualLiquidos };
-        });
-
-        const totals = processedData.reduce((acc, current) => {
-            acc.acertos += current.acertos;
-            acc.erros += current.erros;
-            acc.anuladas += current.anuladas;
-            acc.brancos += current.brancos;
-            acc.totalQuestoes += current.totalQuestoes;
-            acc.acertosLiquidos += current.acertosLiquidos;
-            return acc;
-        }, { disciplina: 'Total', acertos: 0, erros: 0, brancos: 0, anuladas: 0, totalQuestoes: 0, acertosLiquidos: 0 });
-
-        totals.percentualBruta = totals.totalQuestoes > 0 ? totals.acertos / totals.totalQuestoes : 0;
-        totals.percentualLiquidos = totals.totalQuestoes > 0 ? (totals.acertosLiquidos > 0 ? totals.acertosLiquidos / totals.totalQuestoes : 0) : 0;
-        
-        return { processedData, totals };
-    }, [proof]);
-
-
-    if (isLoading) {
-        return (
-            <div className="flex justify-center items-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return <div className="text-center text-red-500 bg-red-100 p-4 rounded-lg">{error}</div>;
-    }
-
-    if (!proof) return null;
+        try {
+            await api.updateProofDetails(proof.id, { subjects: subjectsToSave });
+            alert('Informações salvas com sucesso!');
+            refreshProof();
+        } catch (error) {
+            alert('Falha ao salvar as informações.');
+        }
+    };
 
     return (
-         <div className="bg-white shadow-lg rounded-xl overflow-hidden">
-            <div className="bg-green-600 text-white p-4 flex justify-between items-center gap-4 flex-wrap">
-                <div className="flex-grow">
-                    <h2 className="text-2xl font-bold">{proof.titulo}</h2>
-                    <p className="text-green-200">{proof.banca} - {formatDate(proof.data)}</p>
-                </div>
-                <div className="flex items-center space-x-2 flex-shrink-0">
-                    <button onClick={() => navigate('/minhas-provas')} className="text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition">Voltar</button>
-                    <button
-                        onClick={() => openDeleteModal(proof.id)}
-                        className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition flex items-center"
-                        aria-label="Deletar prova"
-                    >
-                        <TrashIcon className="w-5 h-5" />
-                    </button>
-                </div>
+        <div className="p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Matérias do Concurso</h3>
+            <div className="space-y-3">
+                {subjects.map((subject, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                        <input type="text" placeholder="Nome da Matéria" value={subject.nome} onChange={e => handleSubjectChange(index, 'nome', e.target.value)} className="flex-grow p-2 border rounded"/>
+                        <input type="number" placeholder="Nº de Questões" value={subject.questoes} onChange={e => handleSubjectChange(index, 'questoes', e.target.value)} className="w-32 p-2 border rounded"/>
+                        <button onClick={() => handleRemoveSubject(index)} className="text-red-500 p-2 hover:bg-red-100 rounded-full"><TrashIcon className="w-5 h-5"/></button>
+                    </div>
+                ))}
             </div>
-            <div className="text-sm text-gray-800">
-                <div className="hidden md:grid grid-cols-9 text-center font-semibold bg-green-200 py-3 border-b-2 border-green-300">
-                    <p className="text-left pl-4">Matérias</p>
-                    <p>Acertos</p><p>Erros</p><p>Brancos</p><p>Anuladas</p>
-                    <p>Questões</p><p>Líquidos</p><p>% Bruta</p><p>% Líquidos</p>
-                </div>
-                <div className="divide-y divide-gray-200">
-                    {proofTotals.processedData.map((item, index) => <StatsRow key={index} item={item} />)}
-                </div>
-                <StatsRow item={proofTotals.totals} isFooter={true} />
+            <button onClick={handleAddSubject} className="mt-4 text-teal-600 font-semibold">+ Adicionar Matéria</button>
+            <div className="mt-6 border-t pt-4 flex justify-end">
+                <button onClick={handleSaveChanges} className="bg-teal-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-teal-600">Salvar Informações</button>
             </div>
         </div>
     );
-}
+};
+
+
+// Componente Principal da Página
+const ProofDetail = () => {
+    const { proofId } = useParams();
+    const navigate = useNavigate();
+    const [proof, setProof] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('info');
+
+    const fetchProof = async () => {
+        try {
+            const data = await api.getProofById(proofId);
+            setProof(data);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        setIsLoading(true);
+        fetchProof();
+    }, [proofId]);
+
+    if (isLoading) return <div>Carregando...</div>;
+    if (!proof) return <div>Prova não encontrada.</div>;
+
+    const TabButton = ({ tabName, label }) => (
+        <button
+            onClick={() => setActiveTab(tabName)}
+            className={`px-4 py-2 font-semibold border-b-4 transition-colors ${activeTab === tabName ? 'border-teal-500 text-teal-600' : 'border-transparent text-gray-500 hover:border-gray-300'}`}
+        >
+            {label}
+        </button>
+    );
+
+    return (
+        <div className="bg-white shadow-lg rounded-xl overflow-hidden">
+            <div className="p-4 bg-gray-50 border-b">
+                <h2 className="text-2xl font-bold text-gray-800">{proof.titulo}</h2>
+                <p className="text-gray-500">{proof.banca} - {formatDate(proof.data)}</p>
+            </div>
+            
+            <nav className="flex border-b">
+                <TabButton tabName="info" label="Informações do Concurso"/>
+                <TabButton tabName="gabaritos" label="Gabaritos da Banca"/>
+                <TabButton tabName="meuGabarito" label="Meu Gabarito"/>
+                <TabButton tabName="resultado" label="Resultado e Análise"/>
+            </nav>
+
+            <div>
+                {activeTab === 'info' && <InfoTab proof={proof} refreshProof={fetchProof} />}
+                {activeTab === 'gabaritos' && <div className="p-6">Funcionalidade a ser implementada.</div>}
+                {activeTab === 'meuGabarito' && <div className="p-6">Funcionalidade a ser implementada.</div>}
+                {activeTab === 'resultado' && <div className="p-6">Funcionalidade a ser implementada.</div>}
+            </div>
+        </div>
+    );
+};
 
 export default ProofDetail;
