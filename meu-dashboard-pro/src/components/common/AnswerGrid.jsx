@@ -1,43 +1,54 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 
-const AnswerGrid = ({ totalQuestoes, answersString, onAnswerChange, readOnly = false }) => {
-    // Transforma a string de respostas "1:A,2:B" em um objeto {1: 'A', 2: 'B'} para acesso rápido.
-    // O useMemo evita que isso seja recalculado a cada renderização.
-    const answersMap = useMemo(() => {
-        if (!answersString) return {};
-        return answersString.split(',').reduce((acc, pair) => {
-            const [q, a] = pair.split(':');
-            if (q && a) {
-                acc[q] = a;
-            }
-            return acc;
-        }, {});
-    }, [answersString]);
+const AnswerGrid = ({ totalQuestoes, answersMap, onAnswerChange, readOnly = false, comparisonMap = {} }) => {
 
     const handleInputChange = (qNumber, value) => {
         // Limita a um caractere e converte para maiúsculas
         const sanitizedValue = value.slice(0, 1).toUpperCase();
         onAnswerChange(qNumber, sanitizedValue);
+
+        // LÓGICA DE FOCO AUTOMÁTICO
+        if (sanitizedValue.length === 1 && qNumber < totalQuestoes) {
+            const nextInput = document.querySelector(`input[data-q="${qNumber + 1}"]`);
+            if (nextInput) {
+                nextInput.focus();
+                nextInput.select();
+            }
+        }
     };
 
-    // Gera um array de números de 1 até totalQuestoes
-    const questions = Array.from({ length: totalQuestoes }, (_, i) => i + 1);
+    const questions = Array.from({ length: totalQuestoes || 0 }, (_, i) => i + 1);
 
     return (
-        <div className="grid grid-cols-5 sm:grid-cols-10 gap-4">
-            {questions.map(qNumber => (
-                <div key={qNumber} className="text-center">
-                    <label className="font-bold text-gray-700">{qNumber}</label>
-                    <input
-                        type="text"
-                        maxLength="1"
-                        value={answersMap[qNumber] || ''}
-                        onChange={(e) => handleInputChange(qNumber, e.target.value)}
-                        readOnly={readOnly}
-                        className="w-full mt-1 p-2 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500"
-                    />
-                </div>
-            ))}
+        <div className="grid grid-cols-5 sm:grid-cols-10 gap-x-4 gap-y-6">
+            {questions.map(qNumber => {
+                const qStr = String(qNumber);
+                const answer = answersMap[qStr] || '';
+                
+                // Verifica se a resposta foi alterada ou anulada
+                const definAnswer = answersMap[qStr];
+                const prelimAnswer = comparisonMap[qStr];
+                const isChangedOrAnnulled = (prelimAnswer && definAnswer && prelimAnswer !== definAnswer) || definAnswer === 'N';
+
+                const inputClass = isChangedOrAnnulled
+                    ? "text-blue-600 font-bold border-blue-500" // Estilo para alteradas/anuladas
+                    : "border-gray-300 focus:border-teal-500";
+
+                return (
+                    <div key={qNumber} className="text-center">
+                        <label className="font-bold text-gray-700">{qNumber}</label>
+                        <input
+                            type="text"
+                            maxLength="1"
+                            data-q={qNumber}
+                            value={answer}
+                            onChange={(e) => handleInputChange(qNumber, e.target.value)}
+                            readOnly={readOnly}
+                            className={`w-full mt-1 p-1 text-center bg-transparent border-0 border-b-2 focus:ring-0 transition ${inputClass}`}
+                        />
+                    </div>
+                );
+            })}
         </div>
     );
 };

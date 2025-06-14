@@ -52,6 +52,17 @@ export const updateProofDetails = async (id, details) => {
     }
     return response.json();
 };
+
+export const gradeProof = async (id) => {
+    const response = await fetch(`${API_URL}/proofs/${id}/grade`, {
+        method: 'POST',
+    });
+    if (!response.ok) {
+        throw new Error(`Erro de HTTP! Status: ${response.status}`);
+    }
+    return response.json();
+};
+
 // --- Função para a API da Gemini ---
 
 export const getAIAnalysis = async (disciplinas, totais) => {

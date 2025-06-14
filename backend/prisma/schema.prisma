@@ -13,8 +13,8 @@ model Proof {
   titulo             String
   banca              String
   data               DateTime
-  totalQuestoes      Int?      // <-- NOVO: Quantidade total de questões
-  tipoPontuacao      String?   // <-- NOVO: 'liquida' ou 'bruta'
+  totalQuestoes      Int?
+  tipoPontuacao      String?
   gabaritoPreliminar String?
   gabaritoDefinitivo String?
   userAnswers        String?
@@ -23,14 +23,15 @@ model Proof {
   subjects  Subject[]
 }
 
-// NOVO MODELO
 model Subject {
-  id          Int    @id @default(autoincrement())
-  nome        String
-  questoes    Int
+  id              Int    @id @default(autoincrement())
+  nome            String
+  questoes        Int
+  questaoInicio   Int    // <-- Campo necessário
+  questaoFim      Int    // <-- Campo necessário
 
-  proof     Proof @relation(fields: [proofId], references: [id], onDelete: Cascade)
-  proofId   Int
+  proof   Proof @relation(fields: [proofId], references: [id], onDelete: Cascade)
+  proofId Int
 }
 
 model Result {

@@ -3,37 +3,56 @@ import { useParams } from 'react-router-dom';
 import * as api from '../api/apiService';
 import { formatDate } from '../utils/formatters';
 
-// Importando os componentes de abas dos seus próprios arquivos
 import InfoTab from './tabs/InfoTab';
 import OfficialKeysTab from './tabs/OfficialKeysTab';
 import UserAnswersTab from './tabs/UserAnswersTab';
+import ResultTab from './tabs/ResultTab';
+import SimulateAnnulmentTab from './tabs/SimulateAnnulmentTab';
 
-
-// Componente Principal da Página
 const ProofDetail = () => {
-    const { proofId } = useParams();
+    const { proofId } = useParams(); // Pega o ID da URL
+    
+    // --- PONTO DE VERIFICAÇÃO 1 ---
+    console.log(`[ProofDetail] Componente renderizado. ID da URL (useParams): ${proofId}`);
+
     const [proof, setProof] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('info');
 
     const fetchProof = useCallback(async () => {
+        // --- PONTO DE VERIFICAÇÃO 2 ---
+        console.log(`[ProofDetail] Dentro do fetchProof. Tentando buscar dados para o ID: ${proofId}`);
+
+        if (!proofId) {
+            console.error("[ProofDetail] ID da prova é nulo ou indefinido. Abortando busca.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
             const data = await api.getProofById(proofId);
+            console.log("[ProofDetail] Dados recebidos da API:", data);
             setProof(data);
         } catch (err) {
-            console.error(err);
+            console.error("[ProofDetail] Erro ao buscar dados da prova:", err);
+            setProof(null); // Limpa a prova em caso de erro
         } finally {
             setIsLoading(false);
         }
-    }, [proofId]);
+    }, [proofId]); // A dependência agora é o proofId diretamente
 
     useEffect(() => {
+        console.log("[ProofDetail] useEffect disparado. Chamando fetchProof...");
         setIsLoading(true);
         fetchProof();
-    }, [fetchProof]);
+    }, [fetchProof]); // O fetchProof só muda quando o proofId muda
 
-    if (isLoading) return <div className="text-center p-10">Carregando...</div>;
-    if (!proof) return <div className="text-center p-10">Prova não encontrada.</div>;
+    if (isLoading) return <div className="text-center p-10 font-bold">Carregando Detalhes da Prova...</div>;
+    
+    // Se, após carregar, a prova for nula, mostramos o erro
+    if (!proof) {
+        return <div className="text-center p-10 font-bold text-red-500">Erro: Prova com ID '{proofId}' não encontrada.</div>;
+    }
 
     const TabButton = ({ tabName, label }) => (
         <button
@@ -55,19 +74,19 @@ const ProofDetail = () => {
                 <TabButton tabName="info" label="Informações"/>
                 <TabButton tabName="gabaritos" label="Gabaritos da Banca"/>
                 <TabButton tabName="meuGabarito" label="Meu Gabarito"/>
-                <TabButton tabName="resultado" label="Resultado e Análise"/>
+                <TabButton tabName="simulacao" label="Simular Anulações"/>
+                <TabButton tabName="resultado" label="Resultado Final"/>
             </nav>
 
             <div className="min-h-[300px]">
                 {activeTab === 'info' && <InfoTab proof={proof} refreshProof={fetchProof} />}
                 {activeTab === 'gabaritos' && <OfficialKeysTab proof={proof} />}
                 {activeTab === 'meuGabarito' && <UserAnswersTab proof={proof} />}
-                {activeTab === 'resultado' && <div className="p-6">A correção automática será implementada aqui.</div>}
+                {activeTab === 'simulacao' && <SimulateAnnulmentTab proof={proof} />}
+                {activeTab === 'resultado' && <ResultTab proof={proof} refreshProof={fetchProof} />}
             </div>
         </div>
     );
 };
-
-// O código duplicado do InfoTab foi REMOVIDO daqui e movido para seu próprio arquivo.
 
 export default ProofDetail;

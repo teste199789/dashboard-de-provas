@@ -4,7 +4,23 @@ CREATE TABLE "Proof" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "titulo" TEXT NOT NULL,
     "banca" TEXT NOT NULL,
-    "data" DATETIME NOT NULL
+    "data" DATETIME NOT NULL,
+    "totalQuestoes" INTEGER,
+    "tipoPontuacao" TEXT,
+    "gabaritoPreliminar" TEXT,
+    "gabaritoDefinitivo" TEXT,
+    "userAnswers" TEXT
+);
+
+-- CreateTable
+CREATE TABLE "Subject" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "nome" TEXT NOT NULL,
+    "questoes" INTEGER NOT NULL,
+    "questaoInicio" INTEGER NOT NULL,
+    "questaoFim" INTEGER NOT NULL,
+    "proofId" INTEGER NOT NULL,
+    CONSTRAINT "Subject_proofId_fkey" FOREIGN KEY ("proofId") REFERENCES "Proof" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
