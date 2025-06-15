@@ -16,15 +16,27 @@ const PORT = process.env.PORT || 3001;
 // POST /api/proofs (Cria um novo concurso ou simulado)
 app.post('/api/proofs', async (req, res) => {
     try {
-        const { titulo, banca, data, totalQuestoes, tipoPontuacao, type } = req.body;
+        const {
+            titulo, banca, data, totalQuestoes, tipoPontuacao, type, orgao, cargo, notaDiscursiva,
+            // NOVOS CAMPOS
+            resultadoObjetiva, resultadoDiscursiva, resultadoFinal
+        } = req.body;
+
         const newProof = await prisma.proof.create({
-            data: { 
-                titulo, 
-                banca, 
+            data: {
+                titulo,
+                banca,
                 data: new Date(data),
                 totalQuestoes: parseInt(totalQuestoes),
                 tipoPontuacao,
-                type
+                type,
+                orgao,
+                cargo,
+                notaDiscursiva: notaDiscursiva ? parseFloat(notaDiscursiva) : null,
+                // NOVOS CAMPOS
+                resultadoObjetiva,
+                resultadoDiscursiva,
+                resultadoFinal
             },
         });
         res.status(201).json(newProof);
@@ -55,8 +67,8 @@ app.get('/api/proofs/:id', async (req, res) => {
             where: { id: parseInt(id) },
             include: { results: { orderBy: { id: 'asc' } }, subjects: { orderBy: { id: 'asc' } } },
         });
-        if (!proof) { 
-            return res.status(404).json({ error: "Prova não encontrada." }); 
+        if (!proof) {
+            return res.status(404).json({ error: "Prova não encontrada." });
         }
         res.json(proof);
     } catch (error) {
@@ -80,12 +92,15 @@ app.delete('/api/proofs/:id', async (req, res) => {
 app.put('/api/proofs/:id/details', async (req, res) => {
     try {
         const { id } = req.params;
-        const { 
-            gabaritoPreliminar, gabaritoDefinitivo, userAnswers, 
-            subjects, totalQuestoes, titulo, banca, data, inscritos, simulacaoAnuladas 
+        const {
+            gabaritoPreliminar, gabaritoDefinitivo, userAnswers,
+            subjects, totalQuestoes, titulo, banca, data, inscritos, simulacaoAnuladas, orgao, cargo, notaDiscursiva,
+            // NOVOS CAMPOS
+            resultadoObjetiva, resultadoDiscursiva, resultadoFinal
         } = req.body;
-        
+
         const dataToUpdate = {};
+
         if (titulo !== undefined) dataToUpdate.titulo = titulo;
         if (banca !== undefined) dataToUpdate.banca = banca;
         if (data !== undefined) dataToUpdate.data = new Date(data);
@@ -95,7 +110,15 @@ app.put('/api/proofs/:id/details', async (req, res) => {
         if (totalQuestoes !== undefined) dataToUpdate.totalQuestoes = parseInt(totalQuestoes);
         if (inscritos !== undefined) dataToUpdate.inscritos = parseInt(inscritos);
         if (simulacaoAnuladas !== undefined) dataToUpdate.simulacaoAnuladas = simulacaoAnuladas;
-        
+        if (orgao !== undefined) dataToUpdate.orgao = orgao;
+        if (cargo !== undefined) dataToUpdate.cargo = cargo;
+        if (notaDiscursiva !== undefined) dataToUpdate.notaDiscursiva = notaDiscursiva ? parseFloat(notaDiscursiva) : null;
+        // NOVOS CAMPOS
+        if (resultadoObjetiva !== undefined) dataToUpdate.resultadoObjetiva = resultadoObjetiva;
+        if (resultadoDiscursiva !== undefined) dataToUpdate.resultadoDiscursiva = resultadoDiscursiva;
+        if (resultadoFinal !== undefined) dataToUpdate.resultadoFinal = resultadoFinal;
+
+
         if (subjects) {
             let currentQuestion = 1;
             const subjectsWithRanges = subjects.map(s => {
@@ -122,46 +145,6 @@ app.put('/api/proofs/:id/details', async (req, res) => {
 });
 
 
-// --- ROTA DE CORREÇÃO ---
-app.post('/api/proofs/:id/grade', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const proofId = parseInt(id);
-
-        const proofData = await prisma.proof.findUnique({
-            where: { id: proofId },
-            include: { subjects: true },
-        });
-
-        if (!proofData || !proofData.userAnswers || (!proofData.gabaritoDefinitivo && !proofData.gabaritoPreliminar)) {
-            return res.status(400).json({ error: "Para corrigir, preencha seu gabarito e pelo menos um dos gabaritos da banca." });
-        }
-        if (!proofData.subjects || proofData.subjects.length === 0) {
-            return res.status(400).json({ error: "As matérias do concurso não foram definidas." });
-        }
-        
-        const { resultados: resultadosPorMateria } = corrigirProva(proofData);
-        const performanceGeral = calculateOverallPerformance(proofData, resultadosPorMateria);
-
-        await prisma.proof.update({
-            where: { id: proofId },
-            data: { aproveitamento: performanceGeral.percentage }
-        });
-
-        const dataToCreate = resultadosPorMateria.map(r => ({ ...r, proofId }));
-        await prisma.$transaction([
-            prisma.result.deleteMany({ where: { proofId: proofId } }),
-            prisma.result.createMany({ data: dataToCreate }),
-        ]);
-
-        res.status(200).json({ message: "Prova corrigida com sucesso!" });
-
-    } catch(error) {
-        console.error("ERRO AO CORRIGIR PROVA:", error);
-        res.status(500).json({ error: "Falha no processo de correção." });
-    }
-});
-
 // --- ROTA DE CORREÇÃO (COM VERIFICAÇÃO DE SEGURANÇA) ---
 app.post('/api/proofs/:id/grade', async (req, res) => {
     try {
@@ -179,7 +162,7 @@ app.post('/api/proofs/:id/grade', async (req, res) => {
         if (!proofData.subjects || proofData.subjects.length === 0) {
             return res.status(400).json({ error: "As matérias do concurso não foram definidas." });
         }
-        
+
         // Chama a correção e pega os resultados
         const correctionData = corrigirProva(proofData);
 
@@ -187,7 +170,7 @@ app.post('/api/proofs/:id/grade', async (req, res) => {
         if (!correctionData || !correctionData.resultados) {
             throw new Error("A função de correção não retornou um resultado válido.");
         }
-        
+
         const { resultados: resultadosPorMateria } = correctionData;
         const performanceGeral = calculateOverallPerformance(proofData, resultadosPorMateria);
 
@@ -197,7 +180,7 @@ app.post('/api/proofs/:id/grade', async (req, res) => {
         });
 
         const dataToCreate = resultadosPorMateria.map(r => ({ ...r, proofId }));
-        
+
         await prisma.$transaction([
             prisma.result.deleteMany({ where: { proofId: proofId } }),
             prisma.result.createMany({ data: dataToCreate }),
@@ -205,7 +188,7 @@ app.post('/api/proofs/:id/grade', async (req, res) => {
 
         res.status(200).json({ message: "Prova corrigida com sucesso!" });
 
-    } catch(error) {
+    } catch (error) {
         console.error("ERRO AO CORRIGIR PROVA:", error);
         res.status(500).json({ error: "Falha no processo de correção." });
     }

@@ -1,15 +1,20 @@
-import React, { createContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useMemo, useCallback, useContext } from 'react'; // <-- useContext adicionado aqui
 import * as api from '../api/apiService';
+import toast from 'react-hot-toast';
 
 export const ProofsContext = createContext();
+
+export const useProofs = () => {
+    // Agora o useContext está definido e esta função funcionará
+    return useContext(ProofsContext);
+};
 
 export const ProofsProvider = ({ children }) => {
     const [proofsList, setProofsList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [modalState, setModalState] = useState({ isOpen: false, proofId: null });
-    const [analysis, setAnalysis] = useState('');
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [dashboardFilter, setDashboardFilter] = useState('TODOS');
 
     const fetchProofs = useCallback(async () => {
         setError(null);
@@ -35,7 +40,7 @@ export const ProofsProvider = ({ children }) => {
             await fetchProofs();
             return newProof;
         } catch (error) {
-            setError("Falha ao criar a prova.");
+            setError("Falha ao criar prova/simulado.");
             throw error;
         }
     };
@@ -63,18 +68,23 @@ export const ProofsProvider = ({ children }) => {
         if (!id) return;
         try {
             await api.deleteProof(id);
+            toast.success("Item deletado com sucesso!");
             closeDeleteModal();
             fetchProofs();
         } catch (error) {
-            setError("Falha ao deletar a prova.");
+            toast.error("Falha ao deletar o item.");
+            setError("Falha ao deletar o item.");
             closeDeleteModal();
         }
     };
 
     const consolidatedData = useMemo(() => {
+        const filteredProofs = proofsList.filter(proof => {
+            if (dashboardFilter === 'TODOS') return true;
+            return (proof.type || 'CONCURSO') === dashboardFilter;
+        });
         const disciplineTotals = {};
-
-        proofsList.forEach(proof => {
+        filteredProofs.forEach(proof => {
             if (proof.results && proof.results.length > 0 && proof.subjects && proof.subjects.length > 0) {
                 const subjectQuestionMap = new Map(proof.subjects.map(s => [s.nome, s.questoes]));
                 proof.results.forEach(result => {
@@ -90,22 +100,16 @@ export const ProofsProvider = ({ children }) => {
                 });
             }
         });
-
         const processedDisciplinas = Object.entries(disciplineTotals).map(([nome, totais], index) => {
-            const acertosComAnuladas = totais.acertos; // 'acertos' já inclui os pontos das anuladas
-            const pontuacaoLiquida = acertosComAnuladas - totais.erros;
-            const universoValido = totais.totalQuestoes - totais.anuladas;
-
+            const acertosReais = totais.acertos - totais.anuladas;
+            const pontuacaoLiquida = acertosReais - totais.erros;
+            const universoBruto = acertosReais + totais.erros;
             return {
-                id: index,
-                disciplina: nome,
-                ...totais,
-                acertosLiquidos: pontuacaoLiquida,
-                percentualBruta: universoValido > 0 ? acertosComAnuladas / universoValido : 0,
+                id: index, disciplina: nome, ...totais, acertosLiquidos: pontuacaoLiquida,
+                percentualBruta: universoBruto > 0 ? acertosReais / universoBruto : 0,
                 percentualLiquidos: totais.totalQuestoes > 0 ? Math.max(0, pontuacaoLiquida / totais.totalQuestoes) : 0,
             };
         });
-
         const totaisGerais = processedDisciplinas.reduce((acc, current) => {
             acc.acertos += current.acertos;
             acc.erros += current.erros;
@@ -114,23 +118,30 @@ export const ProofsProvider = ({ children }) => {
             acc.totalQuestoes += current.totalQuestoes;
             return acc;
         }, { disciplina: 'Total', acertos: 0, erros: 0, brancos: 0, anuladas: 0, totalQuestoes: 0 });
-
-        const pontuacaoLiquidaGeral = totaisGerais.acertos - totaisGerais.erros;
-        const universoTotalValido = totaisGerais.totalQuestoes - totaisGerais.anuladas;
-        
+        const acertosReaisGerais = totaisGerais.acertos - totaisGerais.anuladas;
+        const pontuacaoLiquidaGeral = acertosReaisGerais - totaisGerais.erros;
+        const universoBrutoGeral = acertosReaisGerais + totaisGerais.erros;
         totaisGerais.acertosLiquidos = pontuacaoLiquidaGeral;
-        // --- FÓRMULA FINAL CORRIGIDA PARA O TOTAL ---
-        totaisGerais.percentualBruta = universoTotalValido > 0 ? totaisGerais.acertos / universoTotalValido : 0;
+        totaisGerais.percentualBruta = universoBrutoGeral > 0 ? acertosReaisGerais / universoBrutoGeral : 0;
         totaisGerais.percentualLiquidos = totaisGerais.totalQuestoes > 0 ? Math.max(0, pontuacaoLiquidaGeral / totaisGerais.totalQuestoes) : 0;
-
         return { disciplinas: processedDisciplinas, totais: totaisGerais };
-    }, [proofsList]);
+    }, [proofsList, dashboardFilter]);
 
     
     const value = {
-        proofsList, consolidatedData, isLoading, error, modalState, fetchProofs, handleAddProof, 
-        openDeleteModal, closeDeleteModal, handleDeleteProof, handleGradeProof,
-        analysis, isAnalyzing,
+        proofsList,
+        consolidatedData,
+        isLoading,
+        error,
+        modalState,
+        dashboardFilter,
+        setDashboardFilter,
+        fetchProofs,
+        handleAddProof,
+        openDeleteModal,
+        closeDeleteModal,
+        handleDeleteProof,
+        handleGradeProof,
     };
 
     return <ProofsContext.Provider value={value}>{children}</ProofsContext.Provider>;
