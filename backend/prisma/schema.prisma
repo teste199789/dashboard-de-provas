@@ -20,6 +20,7 @@ model Proof {
   gabaritoPreliminar String?
   gabaritoDefinitivo String?
   userAnswers        String?
+  simulacaoAnuladas  String?
 
   results   Result[]
   subjects  Subject[]

@@ -1,10 +1,13 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App' // Importa o App.jsx que acabamos de criar
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App'; // Importa o componente App principal
+import './index.css';
+import { ThemeProvider } from './contexts/ThemeContext'; // Importa o Provedor de Tema
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider> {/* 1. O Provedor de Tema envolve tudo */}
+      <App />
+    </ThemeProvider>
   </React.StrictMode>,
-)
+);

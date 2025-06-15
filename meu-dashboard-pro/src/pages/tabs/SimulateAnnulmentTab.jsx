@@ -1,7 +1,86 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import * as api from '../../api/apiService';
+
+// Função para calcular o desempenho original a partir dos resultados já corrigidos
+const calculateOriginalPerformance = (proof) => {
+    if (!proof || !proof.results || proof.results.length === 0) {
+        return { score: 0, acertos: 0, erros: 0 };
+    }
+    
+    // Soma os totais de acertos e erros que vieram do backend
+    const totals = proof.results.reduce((acc, r) => {
+        acc.acertos += r.acertos;
+        acc.erros += r.erros;
+        return acc;
+    }, { acertos: 0, erros: 0 });
+
+    let score = 0;
+    // A pontuação líquida já considera os pontos das anuladas no total de acertos
+    if (proof.tipoPontuacao === 'liquida') {
+        score = totals.acertos - totals.erros;
+    } else {
+        score = totals.acertos;
+    }
+    
+    return { 
+        score, 
+        acertos: totals.acertos, 
+        erros: totals.erros 
+    };
+};
 
 const SimulateAnnulmentTab = ({ proof }) => {
-    const [selectedAnnulments, setSelectedAnnulments] = useState(new Set());
+    // Carrega a simulação salva do banco de dados na primeira vez
+    const initialSimulatedSet = useMemo(() => new Set(proof.simulacaoAnuladas?.split(',').filter(Boolean) || []), [proof.simulacaoAnuladas]);
+    const [selectedAnnulments, setSelectedAnnulments] = useState(initialSimulatedSet);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Garante que o estado seja atualizado se a prova for recarregada
+    useEffect(() => {
+        setSelectedAnnulments(new Set(proof.simulacaoAnuladas?.split(',').filter(Boolean) || []));
+    }, [proof.simulacaoAnuladas]);
+
+    // Lógica de cálculo unificada e corrigida
+    const performanceData = useMemo(() => {
+        const original = calculateOriginalPerformance(proof);
+
+        if (!proof.userAnswers) {
+             return { original, simulated: original, difference: 0 };
+        }
+
+        const userMap = new Map(proof.userAnswers.split(',').map(p => p.split(':')));
+        const definMap = new Map(proof.gabaritoDefinitivo.split(',').map(p => p.split(':')));
+
+        let simulatedAcertos = original.acertos;
+        let simulatedErros = original.erros;
+
+        selectedAnnulments.forEach(qStr => {
+            const userAnswer = userMap.get(qStr);
+            const definAnswer = definMap.get(qStr);
+
+            // Apenas ajusta a pontuação se a questão não era um acerto originalmente
+            if (userAnswer !== definAnswer) {
+                // Se o usuário tinha errado, ele deixa de errar e passa a acertar (+2 na nota líquida)
+                if (userAnswer) {
+                    simulatedErros--;
+                }
+                // Em ambos os casos (erro ou branco), ele ganha o ponto do acerto
+                simulatedAcertos++;
+            }
+        });
+
+        let simulatedScore = simulatedAcertos;
+        if (proof.tipoPontuacao === 'liquida') {
+            simulatedScore = simulatedAcertos - simulatedErros;
+        }
+
+        return {
+            original,
+            simulated: { score: simulatedScore, acertos: simulatedAcertos, erros: simulatedErros },
+            difference: simulatedScore - original.score,
+        };
+    }, [proof, selectedAnnulments]);
+
 
     const handleToggleAnnulment = (qNumber) => {
         setSelectedAnnulments(prev => {
@@ -12,77 +91,22 @@ const SimulateAnnulmentTab = ({ proof }) => {
         });
     };
 
+    const handleSaveSimulation = async () => {
+        setIsSaving(true);
+        try {
+            const simulacaoString = Array.from(selectedAnnulments).join(',');
+            await api.updateProofDetails(proof.id, { simulacaoAnuladas: simulacaoString });
+            alert('Simulação salva com sucesso!');
+        } catch (error) {
+            alert('Falha ao salvar a simulação.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
     const clearSelection = () => {
         setSelectedAnnulments(new Set());
     };
-    
-    // --- LÓGICA DE CÁLCULO CENTRALIZADA E CORRIGIDA ---
-    const performanceData = useMemo(() => {
-        if (!proof || !proof.userAnswers || !proof.gabaritoDefinitivo || !proof.totalQuestoes) {
-            return {
-                original: { score: 0, acertos: 0, erros: 0 },
-                simulated: { score: 0, acertos: 0, erros: 0 },
-                difference: 0
-            };
-        }
-
-        const userMap = new Map(proof.userAnswers.split(',').map(p => p.split(':')));
-        const definMap = new Map(proof.gabaritoDefinitivo.split(',').map(p => p.split(':')));
-        const prelimMap = new Map(proof.gabaritoPreliminar?.split(',').map(p => p.split(':')));
-        
-        let originalAcertos = 0;
-        let originalErros = 0;
-        let simulatedAcertos = 0;
-        let simulatedErros = 0;
-
-        for (let i = 1; i <= proof.totalQuestoes; i++) {
-            const iStr = String(i);
-            const userAnswer = userMap.get(iStr);
-            const definAnswer = definMap.get(iStr);
-            const prelimAnswer = prelimMap.get(iStr);
-
-            const isOfficiallyAnnulled = (prelimMap.size > 0 && prelimAnswer && definAnswer && prelimAnswer !== definAnswer) || (definAnswer === 'N');
-
-            // --- Lógica para a Pontuação Original ---
-            if (isOfficiallyAnnulled) {
-                originalAcertos++;
-            } else if (userAnswer === definAnswer) {
-                originalAcertos++;
-            } else if (userAnswer) {
-                originalErros++;
-            }
-
-            // --- Lógica para a Pontuação Simulada ---
-            const isSimulatedAsAnnulled = selectedAnnulments.has(iStr);
-            if (isOfficiallyAnnulled || isSimulatedAsAnnulled) {
-                simulatedAcertos++;
-            } else {
-                if (userAnswer === definAnswer) {
-                    simulatedAcertos++;
-                } else if (userAnswer) {
-                    simulatedErros++;
-                }
-            }
-        }
-
-        let originalScore = 0;
-        let simulatedScore = 0;
-
-        if (proof.tipoPontuacao === 'liquida') {
-            originalScore = originalAcertos - originalErros;
-            simulatedScore = simulatedAcertos - simulatedErros;
-        } else {
-            originalScore = originalAcertos;
-            simulatedScore = simulatedAcertos;
-        }
-
-        return {
-            original: { score: originalScore, acertos: originalAcertos, erros: originalErros },
-            simulated: { score: simulatedScore, acertos: simulatedAcertos, erros: simulatedErros },
-            difference: simulatedScore - originalScore,
-        };
-
-    }, [proof, selectedAnnulments]);
     
     const userAnswersMap = useMemo(() => new Map(proof.userAnswers?.split(',').map(p => p.split(':'))), [proof.userAnswers]);
     const definitiveAnswersMap = useMemo(() => new Map(proof.gabaritoDefinitivo?.split(',').map(p => p.split(':'))), [proof.gabaritoDefinitivo]);
@@ -90,8 +114,18 @@ const SimulateAnnulmentTab = ({ proof }) => {
 
     return (
         <div className="p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Simulador de Anulações</h3>
-            <p className="text-sm text-gray-500 mb-6">Selecione questões para simular uma anulação e veja o impacto na sua nota. Cada questão anulada (oficial ou simulada) é contada como um acerto.</p>
+            <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                <div>
+                    <h3 className="text-xl font-bold text-gray-800">Simulador de Anulações</h3>
+                    <p className="text-sm text-gray-500">Selecione questões para ver o impacto na sua nota. Cada questão anulada é contada como um acerto.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleSaveSimulation} disabled={isSaving} className="font-semibold bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                        {isSaving ? 'Salvando...' : 'Salvar Simulação'}
+                    </button>
+                    <button onClick={clearSelection} className="font-semibold bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition">Limpar Seleção</button>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {/* Painel de Resultados */}
@@ -113,16 +147,13 @@ const SimulateAnnulmentTab = ({ proof }) => {
                     </div>
                 </div>
 
-                {/* Seletor de Questões */}
+                {/* --- SELETOR DE QUESTÕES (CÓDIGO RESTAURADO) --- */}
                 <div className="md:col-span-2 lg:col-span-3 p-4 border rounded-lg">
                     <div className="flex justify-between items-center mb-4">
-                        <p className="font-bold">Selecione as questões para anular:</p>
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm font-medium text-gray-600 bg-gray-200 px-3 py-1 rounded-full">
-                                {selectedAnnulments.size} selecionada(s)
-                            </span>
-                            <button onClick={clearSelection} className="text-sm font-semibold text-blue-600 hover:underline">Limpar</button>
-                        </div>
+                        <p className="font-bold">Selecione as questões:</p>
+                        <span className="text-sm font-medium text-gray-600 bg-gray-200 px-3 py-1 rounded-full">
+                            {selectedAnnulments.size} selecionada(s)
+                        </span>
                     </div>
                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
                         {questions.map(qNumber => {
