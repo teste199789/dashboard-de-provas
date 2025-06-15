@@ -21,7 +21,7 @@ app.put('/api/proofs/:id/details', async (req, res) => {
         // Pega todos os possíveis campos do corpo da requisição
         const { 
             gabaritoPreliminar, gabaritoDefinitivo, userAnswers, 
-            subjects, totalQuestoes, titulo, banca, data 
+            subjects, totalQuestoes, titulo, banca, data, inscritos 
         } = req.body;
 
         console.log(`[Backend] Recebido PUT para ID ${id} com dados:`, req.body); // Log de depuração
@@ -36,6 +36,7 @@ app.put('/api/proofs/:id/details', async (req, res) => {
         if (gabaritoDefinitivo !== undefined) dataToUpdate.gabaritoDefinitivo = gabaritoDefinitivo;
         if (userAnswers !== undefined) dataToUpdate.userAnswers = userAnswers;
         if (totalQuestoes !== undefined) dataToUpdate.totalQuestoes = parseInt(totalQuestoes);
+        if (inscritos !== undefined) dataToUpdate.inscritos = parseInt(inscritos);
         
         if (subjects) {
             let currentQuestion = 1;

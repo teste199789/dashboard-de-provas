@@ -16,6 +16,7 @@ model Proof {
   totalQuestoes      Int   
   tipoPontuacao      String?   
   aproveitamento     Float?   
+  inscritos          Int? 
 
   gabaritoPreliminar String?
   gabaritoDefinitivo String?

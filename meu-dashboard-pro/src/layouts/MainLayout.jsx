@@ -1,34 +1,59 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useProofs } from '../hooks/useProofs';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import ChartBarIcon from '../components/icons/ChartBarIcon';
 import NavButton from '../components/common/NavButton';
 import ThemeToggle from '../components/common/ThemeToggle';
+import MenuIcon from '../components/icons/MenuIcon';
+import XIcon from '../components/icons/XIcon';
 
-const Header = () => (
+const Header = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  return (
     <>
-        <header className="mb-8">
-            <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                    <ChartBarIcon className="w-10 h-10 mr-4 text-teal-500" />
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-gray-100">Dashboard de Provas</h1>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1 text-lg">Sua central de análise de desempenho.</p>
-                    </div>
-                </div>
-                <ThemeToggle />
+      <header className="mb-6">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <ChartBarIcon className="w-8 h-8 md:w-10 md:h-10 mr-3 text-teal-500" />
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">Dashboard de Provas</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">Sua central de análise de desempenho.</p>
             </div>
-        </header>
+          </div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            {/* Botão do Menu Hambúrguer (só aparece em telas pequenas) */}
+            <div className="md:hidden">
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
+                {isMenuOpen ? <XIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <nav className="flex space-x-2 md:space-x-4 mb-8 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm overflow-x-auto">
-            <NavButton to="/">Dashboard</NavButton>
-            <NavButton to="/meus-concursos">Meus Concursos</NavButton>
-            <NavButton to="/minhas-provas">Minhas Provas</NavButton>
-            <NavButton to="/cadastrar-prova">Cadastrar Prova</NavButton>
+      {/* Navegação de Desktop (só aparece em telas médias e grandes) */}
+      <nav className="hidden md:flex space-x-4 mb-8 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm">
+        <NavButton to="/">Dashboard</NavButton>
+        <NavButton to="/meus-concursos">Meus Concursos</NavButton>
+        <NavButton to="/minhas-provas">Minhas Provas</NavButton>
+        <NavButton to="/cadastrar-prova">Cadastrar Prova</NavButton>
+      </nav>
+
+      {/* Navegação Mobile (só aparece quando o menu está aberto em telas pequenas) */}
+      {isMenuOpen && (
+        <nav className="flex flex-col space-y-2 md:hidden mb-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+          <NavButton to="/">Dashboard</NavButton>
+          <NavButton to="/meus-concursos">Meus Concursos</NavButton>
+          <NavButton to="/minhas-provas">Minhas Provas</NavButton>
+          <NavButton to="/cadastrar-prova">Cadastrar Prova</NavButton>
         </nav>
+      )}
     </>
-);
+  );
+};
 
 const MainLayout = () => {
     const { modalState, closeDeleteModal, handleDeleteProof } = useProofs();
@@ -42,7 +67,7 @@ const MainLayout = () => {
                 title="Confirmar Exclusão"
                 message="Você tem certeza que deseja deletar esta prova? Esta ação não pode ser desfeita."
             />
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <Header />
                 <main>
                     <Outlet />
