@@ -5,47 +5,34 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const ProofsList = () => {
     const { proofsList, openDeleteModal, isLoading } = useProofs();
+    const [viewType, setViewType] = useState('CONCURSO');
 
-    const [filterBanca, setFilterBanca] = useState('todas');
-    const uniqueBancas = useMemo(() => ['todas', ...new Set(proofsList.map(p => p.banca).filter(Boolean))], [proofsList]);
-    
     const processedProofs = useMemo(() => {
-        let proofs = [...proofsList];
-        
-        if (filterBanca !== 'todas') {
-            proofs = proofs.filter(p => p.banca.toLowerCase().includes(filterBanca.toLowerCase()));
-        }
-
-        return proofs.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-    }, [proofsList, filterBanca]);
+        return proofsList
+            .filter(p => (p.type || 'CONCURSO') === viewType)
+            .sort((a, b) => new Date(b.data) - new Date(a.data));
+    }, [proofsList, viewType]);
 
     if (isLoading) {
-        return <LoadingSpinner message="Carregando suas provas..." />
+        return <LoadingSpinner message="Carregando seu histórico..." />
     }
 
     return (
     <div className="space-y-6">
-        <div className="text-center"> {/* Container para centralizar */}
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Meu Histórico de Provas</h2>
+        <div className="flex justify-center mb-4 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg max-w-sm mx-auto">
+            <button onClick={() => setViewType('CONCURSO')} className={`w-full py-2 px-4 rounded-md font-semibold transition-colors ${viewType === 'CONCURSO' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-500 dark:text-gray-300'}`}>Concursos</button>
+            <button onClick={() => setViewType('SIMULADO')} className={`w-full py-2 px-4 rounded-md font-semibold transition-colors ${viewType === 'SIMULADO' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-500 dark:text-gray-300'}`}>Simulados</button>
         </div>
-        
-        <div className="max-w-xs mx-auto"> {/* Filtro também centralizado e com largura máxima */}
-            <label htmlFor="banca-filter" className="sr-only">Filtrar por Banca</label>
-            <select 
-                id="banca-filter" 
-                value={filterBanca} 
-                onChange={e => setFilterBanca(e.target.value)} 
-                className="w-full p-2 border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm"
-            >
-                {uniqueBancas.map(banca => <option key={banca} value={banca}>{banca.charAt(0).toUpperCase() + banca.slice(1)}</option>)}
-            </select>
+        <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+                Meu Histórico de {viewType === 'CONCURSO' ? 'Provas' : 'Simulados'}
+            </h2>
         </div>
         
         {processedProofs.length === 0 ? (
              <div className="text-center py-20 bg-white dark:bg-gray-800/50 rounded-xl">
-                <p className="font-semibold text-gray-600 dark:text-gray-300">Nenhuma prova cadastrada.</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Vá para a aba "Cadastrar Prova" para começar.</p>
+                <p className="font-semibold text-gray-600 dark:text-gray-300">Nenhum item encontrado.</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Cadastre um novo item para começar.</p>
              </div>
         ) : (
             <div className="space-y-6">

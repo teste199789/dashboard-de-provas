@@ -24,7 +24,9 @@ const ProofDetail = () => {
     const [activeTab, setActiveTab] = useState('info');
     const [isEditingHeader, setIsEditingHeader] = useState(false);
     const [editedProof, setEditedProof] = useState(null);
-    const { fetchProofs } = useProofs();
+    
+    // --- CORREÇÃO AQUI: Pega a função do contexto ---
+    const { fetchProofs, handleGradeProof } = useProofs();
 
     const fetchProof = useCallback(async () => {
         try {
@@ -32,14 +34,14 @@ const ProofDetail = () => {
             setProof(data);
             setEditedProof(data);
         } catch (err) {
-            console.error(err);
+            console.error("Falha ao buscar detalhes da prova:", err);
+            setProof(null);
         } finally {
             setIsLoading(false);
         }
     }, [proofId]);
 
     useEffect(() => {
-        setIsLoading(true);
         fetchProof();
     }, [fetchProof]);
 
@@ -83,10 +85,8 @@ const ProofDetail = () => {
 
     return (
         <div className="space-y-6">
-            {/* --- SEÇÃO 1: CABEÇALHO DA PROVA (AGORA DENTRO DESTE ARQUIVO) --- */}
             <div className="bg-white dark:bg-gray-800/50 rounded-xl shadow-lg p-6 w-full">
                 {isEditingHeader ? (
-                    // MODO DE EDIÇÃO DO CABEÇALHO
                     <div className="space-y-4">
                         <input type="text" name="titulo" value={editedProof.titulo} onChange={handleEditChange} className="w-full text-2xl font-bold p-2 border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md"/>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -101,11 +101,10 @@ const ProofDetail = () => {
                         </div>
                     </div>
                 ) : (
-                    // MODO DE VISUALIZAÇÃO DO CABEÇALHO
                     <div className="flex justify-between items-start gap-4">
                         <div>
                             <p className="font-bold text-blue-600 dark:text-blue-400">
-                                {formatDate(proof.data)} • {proof.banca.toUpperCase()} • {proof.titulo.split('-')[0].trim()}
+                                {formatDate(proof.data)} • {proof.banca.toUpperCase()}
                             </p>
                             <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{proof.titulo}</h2>
                         </div>
@@ -117,7 +116,6 @@ const ProofDetail = () => {
                 )}
             </div>
 
-            {/* --- SEÇÃO 2: ABAS DE GERENCIAMENTO --- */}
             <div className="bg-white dark:bg-gray-800/50 shadow-lg rounded-xl overflow-hidden">
                 <nav className="flex border-b dark:border-gray-700 overflow-x-auto">
                     <TabButton tabName="info" label="Informações"/>
@@ -132,7 +130,8 @@ const ProofDetail = () => {
                     {activeTab === 'info' && <InfoTab proof={proof} refreshProof={fetchProof} />}
                     {activeTab === 'gabaritos' && <OfficialKeysTab proof={proof} refreshProof={fetchProof} />}
                     {activeTab === 'meuGabarito' && <UserAnswersTab proof={proof} refreshProof={fetchProof} />}
-                    {activeTab === 'resultado' && <ResultTab proof={proof} refreshProof={fetchProof} />}
+                    {/* --- CORREÇÃO AQUI: Passa a função 'handleGradeProof' para a aba de resultado --- */}
+                    {activeTab === 'resultado' && <ResultTab proof={proof} refreshProof={fetchProof} handleGradeProof={handleGradeProof} />}
                     {activeTab === 'simulacao' && <SimulateAnnulmentTab proof={proof} />}
                     {activeTab === 'ranking' && <RankingTab proof={proof} />}
                 </div>

@@ -11,6 +11,8 @@ import XIcon from '../components/icons/XIcon';
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const closeMenu = () => setIsMenuOpen(false);
+
   return (
     <>
       <header className="mb-6">
@@ -24,9 +26,8 @@ const Header = () => {
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            {/* Botão do Menu Hambúrguer (só aparece em telas pequenas) */}
             <div className="md:hidden">
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-600 dark:text-gray-300">
                 {isMenuOpen ? <XIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
               </button>
             </div>
@@ -34,21 +35,21 @@ const Header = () => {
         </div>
       </header>
 
-      {/* Navegação de Desktop (só aparece em telas médias e grandes) */}
-      <nav className="hidden md:flex space-x-4 mb-8 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm">
+      <nav className="hidden md:flex space-x-2 mb-8 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm">
         <NavButton to="/">Dashboard</NavButton>
-        <NavButton to="/meus-concursos">Meus Concursos</NavButton>
-        <NavButton to="/minhas-provas">Minhas Provas</NavButton>
+        <NavButton to="/meus-concursos">Evolução</NavButton>
+        <NavButton to="/minhas-provas">Histórico</NavButton>
         <NavButton to="/cadastrar-prova">Cadastrar Prova</NavButton>
+        <NavButton to="/cadastrar-simulado">Cadastrar Simulado</NavButton>
       </nav>
 
-      {/* Navegação Mobile (só aparece quando o menu está aberto em telas pequenas) */}
       {isMenuOpen && (
-        <nav className="flex flex-col space-y-2 md:hidden mb-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+        <nav onClick={closeMenu} className="flex flex-col space-y-2 md:hidden mb-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
           <NavButton to="/">Dashboard</NavButton>
-          <NavButton to="/meus-concursos">Meus Concursos</NavButton>
-          <NavButton to="/minhas-provas">Minhas Provas</NavButton>
+          <NavButton to="/meus-concursos">Evolução</NavButton>
+          <NavButton to="/minhas-provas">Histórico</NavButton>
           <NavButton to="/cadastrar-prova">Cadastrar Prova</NavButton>
+          <NavButton to="/cadastrar-simulado">Cadastrar Simulado</NavButton>
         </nav>
       )}
     </>
@@ -57,21 +58,12 @@ const Header = () => {
 
 const MainLayout = () => {
     const { modalState, closeDeleteModal, handleDeleteProof } = useProofs();
-
     return (
         <div className="bg-gray-100 dark:bg-gray-900 min-h-screen font-sans text-gray-800 dark:text-gray-200">
-            <ConfirmationModal
-                isOpen={modalState.isOpen}
-                onCancel={closeDeleteModal}
-                onConfirm={handleDeleteProof}
-                title="Confirmar Exclusão"
-                message="Você tem certeza que deseja deletar esta prova? Esta ação não pode ser desfeita."
-            />
+            <ConfirmationModal isOpen={modalState.isOpen} onCancel={closeDeleteModal} onConfirm={handleDeleteProof} title="Confirmar Exclusão" message="Você tem certeza? Esta ação não pode ser desfeita."/>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 <Header />
-                <main>
-                    <Outlet />
-                </main>
+                <main><Outlet /></main>
             </div>
         </div>
     );

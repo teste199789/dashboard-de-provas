@@ -22,6 +22,7 @@ model Proof {
   gabaritoDefinitivo String?
   userAnswers        String?
   simulacaoAnuladas  String?
+    type               String    @default("CONCURSO")
 
   results   Result[]
   subjects  Subject[]
